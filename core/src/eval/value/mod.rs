@@ -1786,7 +1786,7 @@ pub type ThunkData = RefCell<lazy::ThunkData>;
 pub type TermData = Term;
 pub type LabelData = Label;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, rkyv::Archive)]
 pub struct EnumVariantData {
     pub tag: LocIdent,
     pub arg: Option<NickelValue>,
@@ -1796,7 +1796,7 @@ pub type ForeignIdData = ForeignIdPayload;
 pub type CustomContractData = NickelValue;
 pub type SealingKeyData = SealingKey;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, rkyv::Archive)]
 pub struct TypeData {
     /// The static type.
     pub typ: Type,
