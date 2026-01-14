@@ -85,6 +85,32 @@ pub struct EnumRow(pub EnumRowF<Box<Type>>);
 
 /// Concrete, recursive definition for enum rows.
 #[derive(Clone, PartialEq, Debug, rkyv::Archive)]
+// We have these rkyv annotations in a few places. For background, rkyv defaults
+// to putting lots of bounds on its generated impls. For example, without any
+// annotations it generates something like
+//
+// ```
+// impl Archive for EnumRows where EnumRowsF<Box<Type>, Box<EnumRows>>: Archive {...}
+// ```
+//
+// This doesn't work for recursive types like this, because after a few more steps
+// the `where` bound above will recursively require `EnumRows: Archive`. The solution
+// is to tell rkyv to omit the bounds, and just generate
+//
+// ```
+// impl Archive for EnumRows {...}
+// ```
+//
+// That isn't quite enough, because we make use of certain optional rkyv
+// features (namely, rc sharing and vec-like collections) that require a few
+// bounds on some derived impls (specifically, the impl of `CheckBytes<__C>`
+// for the generated `ArchivedEnumRows` struct). So we have to put those bounds
+// back.
+#[rkyv(bytecheck(bounds(
+    __C: rkyv::validation::ArchiveContext,
+    __C: rkyv::validation::shared::SharedContext,
+    <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
+)))]
 pub struct EnumRows(#[rkyv(omit_bounds)] pub EnumRowsF<Box<Type>, Box<EnumRows>>);
 
 /// Concrete, recursive definition for a record row.
@@ -93,12 +119,22 @@ pub struct EnumRows(#[rkyv(omit_bounds)] pub EnumRowsF<Box<Type>, Box<EnumRows>>
 /// `RecordRowF` is from a different crate).
 pub struct RecordRow(pub RecordRowF<Box<Type>>);
 
-#[derive(Clone, PartialEq, Debug, rkyv::Archive)]
 /// Concrete, recursive definition for record rows.
+#[derive(Clone, PartialEq, Debug, rkyv::Archive)]
+#[rkyv(bytecheck(bounds(
+    __C: rkyv::validation::ArchiveContext,
+    __C: rkyv::validation::shared::SharedContext,
+    <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
+)))]
 pub struct RecordRows(#[rkyv(omit_bounds)] pub RecordRowsF<Box<Type>, Box<RecordRows>>);
 
 /// Concrete, recursive type for a Nickel type.
 #[derive(Clone, PartialEq, Debug, rkyv::Archive)]
+#[rkyv(bytecheck(bounds(
+    __C: rkyv::validation::ArchiveContext,
+    __C: rkyv::validation::shared::SharedContext,
+    <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
+)))]
 pub struct Type {
     #[rkyv(omit_bounds)]
     pub typ: TypeF<Box<Type>, RecordRows, EnumRows, NickelValue>,

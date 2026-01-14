@@ -9,13 +9,18 @@ use crate::{position::PosIdx, term::Term};
 
 use super::{
     ArrayData, CustomContractData, EnumVariantData, ForeignIdData, LabelData, NickelValue,
-    NumberData, RecordData, SealingKeyData, StringData, Thunk, TypeData, ValueContent,
-    lens::TermContent,
+    RecordData, SealingKeyData, StringData, Thunk, TypeData, ValueContent,
 };
 
 #[derive(Archive)]
+#[rkyv(bytecheck(bounds(
+    __C: rkyv::validation::ArchiveContext,
+    __C: rkyv::validation::shared::SharedContext,
+    <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
+)))]
 pub struct ValueOwned {
     pos_idx: PosIdx,
+    #[rkyv(omit_bounds)]
     payload: ValuePayload,
 }
 
@@ -63,7 +68,7 @@ impl From<NickelValue> for ValueOwned {
 
 // TODO: with newer malachite (and some more code), we could do this without copying the number data.
 #[derive(Archive, Serialize, Deserialize)]
-struct NumberStash {
+pub struct NumberStash {
     sign: bool,
     num_limbs: Vec<u64>,
     denom_limbs: Vec<u64>,
@@ -99,7 +104,7 @@ impl Flavor for NickelValueFlavor {
 }
 
 impl Archive for NickelValue {
-    type Archived = ArchivedRc<ValueOwned, NickelValueFlavor>;
+    type Archived = ArchivedRc<<ValueOwned as Archive>::Archived, NickelValueFlavor>;
 
     type Resolver = RcResolver;
 
