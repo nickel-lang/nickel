@@ -26,7 +26,9 @@ use std::{fmt, io};
 pub mod yaml;
 
 /// Available export formats.
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, rkyv::Archive)]
+#[derive(
+    Copy, Clone, Eq, PartialEq, Debug, Default, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ExportFormat {
     /// Evaluate a Nickel expression to a string and write that text to the output
@@ -351,7 +353,7 @@ impl<'de> Deserialize<'de> for NickelValue {
 }
 
 /// Element of a path to a specific value within a serialized term. See [NickelPointer].
-#[derive(Debug, PartialEq, Clone, rkyv::Archive)]
+#[derive(Debug, PartialEq, Clone, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub enum NickelPointerElem {
     Field(Ident),
     Index(usize),
@@ -388,7 +390,7 @@ impl fmt::Display for NickelPointerElem {
 ///
 /// The path to the string `"world"` is `[Field("foo"), Field("bar"), Index(1)]`. This is
 /// represented (e.g. in error messages) as `foo.bar[1]`.
-#[derive(Debug, PartialEq, Clone, Default, rkyv::Archive)]
+#[derive(Debug, PartialEq, Clone, Default, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct NickelPointer(pub Vec<NickelPointerElem>);
 
 impl NickelPointer {

@@ -65,7 +65,9 @@ pub mod ty_path {
     use nickel_lang_vector::Vector;
 
     /// An element of a path type.
-    #[derive(Debug, Clone, PartialEq, Eq, Copy, rkyv::Archive)]
+    #[derive(
+        Debug, Clone, PartialEq, Eq, Copy, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+    )]
     pub enum Elem {
         Domain,
         Codomain,
@@ -279,7 +281,7 @@ pub mod ty_path {
 /// user-written contracts, but is toggled in the argument contract when the interpreter decomposes
 /// an higher order-contract. This also generalizes to higher types such as `((Number -> Number) ->
 /// Number) -> Number` where the polarity alternates each time.
-#[derive(Debug, Clone, PartialEq, rkyv::Archive)]
+#[derive(Debug, Clone, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct Label {
     /// The type checked by the original contract.
     pub typ: Rc<Type>,
@@ -324,7 +326,7 @@ pub struct Label {
 
 /// Data about type variables that is needed for polymorphic contracts to decide which actions to
 /// take.
-#[derive(Debug, Clone, PartialEq, Eq, rkyv::Archive)]
+#[derive(Debug, Clone, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct TypeVarData {
     pub polarity: Polarity,
 }
@@ -344,7 +346,7 @@ impl From<&TypeVarData> for NickelValue {
 }
 
 /// A polarity. See [`Label`]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, rkyv::Archive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub enum Polarity {
     Positive,
     Negative,
@@ -382,7 +384,7 @@ impl TryFrom<&NickelValue> for Polarity {
 
 /// Custom reporting diagnostic that can be set by user-code through the `label` API. Used to
 /// customize contract error messages, and provide more context than "a contract has failed".
-#[derive(Debug, Clone, PartialEq, Default, rkyv::Archive)]
+#[derive(Debug, Clone, PartialEq, Default, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct ContractDiagnostic {
     /// The main error message tag to be printed together with the error message.
     pub message: Option<String>,
@@ -558,7 +560,7 @@ impl Default for Label {
 /// Additionally, merging arrays currently generates a contract and its associated label for which
 /// we don't necessarily have a defined span at hand. The merge label makes it possible to fallback
 /// to the original position of the merge.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, rkyv::Archive)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct MergeLabel {
     /// The span of the original merge (which might then decompose into many others).
     pub span: PosIdx,

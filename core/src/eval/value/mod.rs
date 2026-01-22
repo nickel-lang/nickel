@@ -1773,7 +1773,7 @@ pub trait ValueBlockData {
 pub type NumberData = Number;
 pub type StringData = NickelString;
 
-#[derive(Clone, Debug, PartialEq, Default, rkyv::Archive)]
+#[derive(Clone, Debug, PartialEq, Default, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct ArrayData {
     pub array: Array,
     /// Arrays implement lazy contract application for performance reasons: contracts applied to
@@ -1786,7 +1786,7 @@ pub type ThunkData = RefCell<lazy::ThunkData>;
 pub type TermData = Term;
 pub type LabelData = Label;
 
-#[derive(Clone, Debug, PartialEq, rkyv::Archive)]
+#[derive(Clone, Debug, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct EnumVariantData {
     pub tag: LocIdent,
     pub arg: Option<NickelValue>,
@@ -1796,7 +1796,7 @@ pub type ForeignIdData = ForeignIdPayload;
 pub type CustomContractData = NickelValue;
 pub type SealingKeyData = SealingKey;
 
-#[derive(Clone, Debug, PartialEq, rkyv::Archive)]
+#[derive(Clone, Debug, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct TypeData {
     /// The static type.
     pub typ: Type,

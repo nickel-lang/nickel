@@ -1,5 +1,5 @@
 //! Define the type of an identifier.
-use rkyv::string::ArchivedString;
+use rkyv::string::{ArchivedString, StringResolver};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
@@ -26,11 +26,21 @@ pub struct Ident(interner::Symbol);
 
 impl rkyv::Archive for Ident {
     type Archived = ArchivedString;
-    type Resolver = ();
+    type Resolver = StringResolver;
 
-    fn resolve(&self, _resolver: (), _out: rkyv::Place<Self::Archived>) {
+    fn resolve(&self, resolver: StringResolver, out: rkyv::Place<Self::Archived>) {
         // FIXME: generated?
-        todo!()
+        ArchivedString::resolve_from_str(self.label(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for Ident
+where
+    S::Error: rkyv::rancor::Source,
+    S: rkyv::ser::Writer + rkyv::rancor::Fallible + ?Sized,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<StringResolver, S::Error> {
+        ArchivedString::serialize_from_str(self.label(), serializer)
     }
 }
 
@@ -155,7 +165,9 @@ impl From<Ident> for &'static str {
 ///
 /// The location is ignored for equality comparison and hashing; it's mainly
 /// intended for error messages.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, rkyv::Archive)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+)]
 #[serde(into = "String", from = "String")]
 pub struct LocIdent {
     ident: Ident,

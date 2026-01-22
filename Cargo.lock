@@ -3817,6 +3817,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nickel-lang-stashed-stdlib"
+version = "1.15.1"
+dependencies = [
+ "nickel-lang-core",
+ "rkyv",
+]
+
+[[package]]
 name = "nickel-lang-utils"
 version = "0.1.0"
 dependencies = [

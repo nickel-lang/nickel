@@ -9,22 +9,38 @@ use nickel_lang_parser::{
 use rkyv::{
     Archive, Deserialize, Serialize,
     de::Pooling,
+    rancor::{Fallible, Source},
     rc::{ArchivedRc, RcResolver},
-    ser::{Allocator, Positional, Sharing, Writer},
+    ser::{
+        Allocator, Positional, Sharing, Writer,
+        allocator::{Arena, ArenaHandle},
+        sharing::Share,
+    },
     vec::{ArchivedVec, VecResolver},
-    with::ArchiveWith,
+    with::{ArchiveWith, SerializeWith},
 };
 use smallvec::SmallVec;
 
 use crate::{
-    eval::value::NickelValue,
+    eval::value::{NickelValue, stash::SerializeValue},
     files::FileId,
     position::{PosIdx, PosTable},
 };
 
+#[derive(Debug)]
 pub enum StashError {
     InvalidFile { id: FileId },
 }
+
+impl std::fmt::Display for StashError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StashError::InvalidFile { id } => write!(f, "file {id:?} isn't in the whitelist"),
+        }
+    }
+}
+
+impl std::error::Error for StashError {}
 
 pub struct Stasher<'a> {
     inner: rkyv::ser::Serializer<
@@ -36,12 +52,33 @@ pub struct Stasher<'a> {
     pos_table: &'a PosTable,
 }
 
+impl SerializeValue for Stasher<'_> {}
+impl<E: rkyv::rancor::Source> SerializeValue for rkyv::rancor::Strategy<Stasher<'_>, E> {}
+
+impl<'a> Stasher<'a> {
+    pub fn new(
+        pos_table: &'a PosTable,
+        allowed_files: impl IntoIterator<Item = FileId>,
+        arena: ArenaHandle<'a>,
+    ) -> Self {
+        Stasher {
+            inner: rkyv::ser::Serializer::new(Vec::new(), arena, Share::new()),
+            allowed_files: allowed_files.into_iter().collect(),
+            pos_table,
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.inner.into_writer()
+    }
+}
+
 impl SerializeInterned<FileId> for Stasher<'_> {
     fn serialize_id(&mut self, id: FileId) -> Result<(), Self::Error> {
         if self.allowed_files.contains(&id) {
             Ok(())
         } else {
-            Err(StashError::InvalidFile { id })
+            Err(rkyv::rancor::Error::new(StashError::InvalidFile { id }))
         }
     }
 }
@@ -58,7 +95,7 @@ impl SerializeInterned<PosIdx> for Stasher<'_> {
 }
 
 impl rkyv::rancor::Fallible for Stasher<'_> {
-    type Error = StashError;
+    type Error = rkyv::rancor::Error;
 }
 
 impl<'a> Positional for Stasher<'a> {
@@ -155,8 +192,9 @@ impl<E: rkyv::rancor::Source> Pooling<E> for Unstasher {
 
 pub(crate) struct ArchiveSmallVec;
 
-impl<A: smallvec::Array> ArchiveWith<SmallVec<A>> for ArchiveSmallVec
+impl<A> ArchiveWith<SmallVec<A>> for ArchiveSmallVec
 where
+    A: smallvec::Array,
     A::Item: Archive,
 {
     type Archived = ArchivedVec<<A::Item as Archive>::Archived>;
@@ -168,5 +206,19 @@ where
         out: rkyv::Place<Self::Archived>,
     ) {
         ArchivedVec::resolve_from_len(field.len(), resolver, out);
+    }
+}
+
+impl<A, S> SerializeWith<SmallVec<A>, S> for ArchiveSmallVec
+where
+    S: Fallible + rkyv::ser::Writer + rkyv::ser::Allocator + ?Sized,
+    A: smallvec::Array,
+    A::Item: Serialize<S>,
+{
+    fn serialize_with(
+        field: &SmallVec<A>,
+        serializer: &mut S,
+    ) -> Result<Self::Resolver, <S as rkyv::rancor::Fallible>::Error> {
+        ArchivedVec::serialize_from_slice(field.as_slice(), serializer)
     }
 }

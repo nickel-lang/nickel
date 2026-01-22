@@ -1053,7 +1053,7 @@ where
 impl<S, T, const N: usize> rkyv::Serialize<S> for Vector<T, N>
 where
     Const<N>: ValidBranchingConstant,
-    S: Fallible + rkyv::ser::Allocator + rkyv::ser::Writer,
+    S: Fallible + rkyv::ser::Allocator + rkyv::ser::Writer + ?Sized,
     T: rkyv::Serialize<S> + Clone,
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {

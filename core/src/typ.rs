@@ -84,7 +84,7 @@ pub use nickel_lang_parser::typ::{
 pub struct EnumRow(pub EnumRowF<Box<Type>>);
 
 /// Concrete, recursive definition for enum rows.
-#[derive(Clone, PartialEq, Debug, rkyv::Archive)]
+#[derive(Clone, PartialEq, Debug, rkyv::Archive, rkyv::Serialize)]
 // We have these rkyv annotations in a few places. For background, rkyv defaults
 // to putting lots of bounds on its generated impls. For example, without any
 // annotations it generates something like
@@ -111,6 +111,10 @@ pub struct EnumRow(pub EnumRowF<Box<Type>>);
     __C: rkyv::validation::shared::SharedContext,
     <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
 )))]
+#[rkyv(serialize_bounds(
+    __S: crate::eval::value::stash::SerializeValue,
+    __S::Error: rkyv::rancor::Source,
+))]
 pub struct EnumRows(#[rkyv(omit_bounds)] pub EnumRowsF<Box<Type>, Box<EnumRows>>);
 
 /// Concrete, recursive definition for a record row.
@@ -120,21 +124,29 @@ pub struct EnumRows(#[rkyv(omit_bounds)] pub EnumRowsF<Box<Type>, Box<EnumRows>>
 pub struct RecordRow(pub RecordRowF<Box<Type>>);
 
 /// Concrete, recursive definition for record rows.
-#[derive(Clone, PartialEq, Debug, rkyv::Archive)]
+#[derive(Clone, PartialEq, Debug, rkyv::Archive, rkyv::Serialize)]
 #[rkyv(bytecheck(bounds(
     __C: rkyv::validation::ArchiveContext,
     __C: rkyv::validation::shared::SharedContext,
     <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
 )))]
+#[rkyv(serialize_bounds(
+    __S: crate::eval::value::stash::SerializeValue,
+    __S::Error: rkyv::rancor::Source,
+))]
 pub struct RecordRows(#[rkyv(omit_bounds)] pub RecordRowsF<Box<Type>, Box<RecordRows>>);
 
 /// Concrete, recursive type for a Nickel type.
-#[derive(Clone, PartialEq, Debug, rkyv::Archive)]
+#[derive(Clone, PartialEq, Debug, rkyv::Archive, rkyv::Serialize)]
 #[rkyv(bytecheck(bounds(
     __C: rkyv::validation::ArchiveContext,
     __C: rkyv::validation::shared::SharedContext,
     <__C as rkyv::rancor::Fallible>::Error: rkyv::rancor::Source,
 )))]
+#[rkyv(serialize_bounds(
+    __S: crate::eval::value::stash::SerializeValue,
+    __S::Error: rkyv::rancor::Source,
+))]
 pub struct Type {
     #[rkyv(omit_bounds)]
     pub typ: TypeF<Box<Type>, RecordRows, EnumRows, NickelValue>,

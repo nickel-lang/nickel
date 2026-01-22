@@ -26,6 +26,22 @@ pub trait DeserializeInterned<Id: Interned>: Fallible {
     fn deserialize_id(&mut self, value: Id::Resolved) -> Result<Id, Self::Error>;
 }
 
+impl<T, S, E> SerializeInterned<T> for rkyv::rancor::Strategy<S, E>
+where
+    S: SerializeInterned<T>,
+    S::Error: std::error::Error + Send + Sync + 'static,
+    T: Interned,
+    E: rkyv::rancor::Source,
+{
+    fn serialize_id(&mut self, id: T) -> Result<(), E> {
+        use rkyv::rancor::Source;
+        use std::ops::DerefMut;
+        self.deref_mut()
+            .serialize_id(id)
+            .map_err(|e| <E as Source>::new(e))
+    }
+}
+
 /// A file identifier, which can be used to access a file in a [`Files`].
 ///
 /// Note that there is no protection against using a `FileId` for the wrong
@@ -60,14 +76,20 @@ impl Interned for FileId {
     type Resolved = u32;
 }
 
-impl<S: SerializeInterned<FileId> + Writer> rkyv::Serialize<S> for FileId {
+impl<S> rkyv::Serialize<S> for FileId
+where
+    S: SerializeInterned<FileId> + Writer + ?Sized,
+{
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         serializer.serialize_id(*self)?;
         Ok(crate::files::FileIdResolver(()))
     }
 }
 
-impl<D: DeserializeInterned<FileId>> rkyv::Deserialize<FileId, D> for ArchivedFileId {
+impl<D> rkyv::Deserialize<FileId, D> for ArchivedFileId
+where
+    D: DeserializeInterned<FileId> + ?Sized,
+{
     fn deserialize(&self, deserializer: &mut D) -> Result<FileId, D::Error> {
         let id: u32 = self.0.to_native();
         deserializer.deserialize_id(id)

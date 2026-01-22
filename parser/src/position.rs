@@ -63,14 +63,14 @@ impl rkyv::with::ArchiveWith<ByteIndex> for ByteIndexU32 {
     }
 }
 
-impl<S: rkyv::rancor::Fallible> rkyv::with::SerializeWith<ByteIndex, S> for ByteIndexU32 {
+impl<S: rkyv::rancor::Fallible + ?Sized> rkyv::with::SerializeWith<ByteIndex, S> for ByteIndexU32 {
     fn serialize_with(field: &ByteIndex, serializer: &mut S) -> Result<(), S::Error> {
         use rkyv::Serialize;
         field.0.serialize(serializer)
     }
 }
 
-impl<D: rkyv::rancor::Fallible>
+impl<D: rkyv::rancor::Fallible + ?Sized>
     rkyv::with::DeserializeWith<rkyv::primitive::ArchivedU32, ByteIndex, D> for ByteIndexU32
 {
     fn deserialize_with(
