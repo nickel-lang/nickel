@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use malachite::Natural;
 use nickel_lang_parser::{
     ast::Number,
-    files::{DeserializeInterned, Interned, SerializeInterned},
+    files::{DeserializeInterned, Files, Interned, SerializeInterned},
     position::TermPos,
 };
 use rkyv::{
@@ -11,13 +11,14 @@ use rkyv::{
     de::Pooling,
     rancor::{Fallible, Source},
     rc::{ArchivedRc, RcResolver},
+    rend::u32_be,
     ser::{
         Allocator, Positional, Sharing, Writer,
         allocator::{Arena, ArenaHandle},
         sharing::Share,
     },
     vec::{ArchivedVec, VecResolver},
-    with::{ArchiveWith, SerializeWith},
+    with::{ArchiveWith, DeserializeWith, SerializeWith},
 };
 use smallvec::SmallVec;
 
@@ -41,6 +42,19 @@ impl std::fmt::Display for StashError {
 }
 
 impl std::error::Error for StashError {}
+
+#[derive(Debug)]
+pub enum UnstashError {
+    InvalidFile { id: u32 },
+}
+
+impl std::fmt::Display for UnstashError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnstashError::InvalidFile { id } => write!(f, "unknown file id {id}"),
+        }
+    }
+}
 
 pub struct Stasher<'a> {
     inner: rkyv::ser::Serializer<
@@ -141,10 +155,6 @@ impl<'a, E: rkyv::rancor::Source> Sharing<E> for Stasher<'a> {
     }
 }
 
-pub enum UnstashError {
-    InvalidFile { id: FileId },
-}
-
 pub struct Unstasher {
     pool: rkyv::de::Pool,
     pub(crate) allowed_files: HashSet<FileId>,
@@ -158,7 +168,7 @@ impl DeserializeInterned<FileId> for Unstasher {
         if self.allowed_files.contains(&id) {
             Ok(id)
         } else {
-            Err(UnstashError::InvalidFile { id })
+            Err(UnstashError::InvalidFile { id: raw_id })
         }
     }
 }
@@ -168,6 +178,16 @@ impl DeserializeInterned<PosIdx> for Unstasher {
         Ok(self.pos_table.push(pos))
     }
 }
+
+// This isn't allowed: "type parameter `D` must be used as the type parameter for some local type"
+// impl<D> Deserialize<FileId, D> for rkyv::rend::u32_le
+// where
+//     D: Fallible + DeserializeInterned<FileId> + ?Sized,
+// {
+//     fn deserialize(&self, deserializer: &mut D) -> Result<FileId, <D as Fallible>::Error> {
+//         todo!()
+//     }
+// }
 
 impl rkyv::rancor::Fallible for Unstasher {
     type Error = UnstashError;
@@ -220,5 +240,25 @@ where
         serializer: &mut S,
     ) -> Result<Self::Resolver, <S as rkyv::rancor::Fallible>::Error> {
         ArchivedVec::serialize_from_slice(field.as_slice(), serializer)
+    }
+}
+
+impl<A, D> DeserializeWith<ArchivedVec<<A::Item as Archive>::Archived>, SmallVec<A>, D>
+    for ArchiveSmallVec
+where
+    A: smallvec::Array,
+    A::Item: Archive,
+    <A::Item as Archive>::Archived: Deserialize<A::Item, D>,
+    D: Fallible + ?Sized,
+{
+    fn deserialize_with(
+        vec: &ArchivedVec<<A::Item as Archive>::Archived>,
+        deserializer: &mut D,
+    ) -> Result<SmallVec<A>, <D as Fallible>::Error> {
+        let mut ret = SmallVec::with_capacity(vec.len());
+        for item in vec.as_slice() {
+            ret.push(item.deserialize(deserializer)?);
+        }
+        Ok(ret)
     }
 }

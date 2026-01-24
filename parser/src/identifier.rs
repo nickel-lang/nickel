@@ -44,6 +44,15 @@ where
     }
 }
 
+impl<D> rkyv::Deserialize<Ident, D> for ArchivedString
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+{
+    fn deserialize(&self, _: &mut D) -> Result<Ident, D::Error> {
+        Ok(Ident::new(self.as_str()))
+    }
+}
+
 impl Ident {
     pub fn new(s: impl AsRef<str>) -> Self {
         Self(INTERNER.get_or_intern(s.as_ref()))

@@ -8,7 +8,7 @@ pub use nickel_lang_parser::position::{RawPos, RawSpan, TermPos};
 
 /// An index into the position table.
 // FIXME: do archive + serialize properly! Interning, etc.
-#[derive(Clone, Copy, Eq, PartialEq, Debug, rkyv::Archive, rkyv::Serialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, rkyv::Archive)]
 pub struct PosIdx(u32);
 
 impl From<PosIdx> for usize {

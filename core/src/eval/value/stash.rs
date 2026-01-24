@@ -5,6 +5,7 @@ use nickel_lang_parser::{
 };
 use rkyv::{
     Archive, Deserialize, Serialize, SerializeUnsized,
+    de::Pooling,
     rancor::Fallible,
     rc::{ArchivedRc, Flavor, RcResolver},
     ser::sharing::SharingState,
@@ -31,17 +32,18 @@ use super::{
     __S: SerializeValue,
     __S::Error: rkyv::rancor::Source,
 ))]
+#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
 pub struct ValueOwned {
     pos_idx: PosIdx,
     #[rkyv(omit_bounds)]
     payload: ValuePayload,
 }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Deserialize, Serialize)]
 pub enum ValuePayload {
     Null,
     Bool(bool),
-    Number(NumberStash),
+    Number(#[rkyv(with = nickel_lang_parser::stash::NumberStash)] Number),
     Array(ArrayData),
     Record(RecordData),
     String(StringData),
@@ -61,7 +63,7 @@ impl From<NickelValue> for ValueOwned {
         let payload = match value.content() {
             ValueContent::Null(_) => ValuePayload::Null,
             ValueContent::Bool(lens) => ValuePayload::Bool(lens.take()),
-            ValueContent::Number(lens) => ValuePayload::Number(lens.take().into()),
+            ValueContent::Number(lens) => ValuePayload::Number(lens.take()),
             ValueContent::Array(lens) => ValuePayload::Array(lens.take().unwrap_or_alloc()),
             ValueContent::Record(lens) => ValuePayload::Record(lens.take().unwrap_or_alloc()),
             ValueContent::String(lens) => ValuePayload::String(lens.take()),
@@ -82,36 +84,6 @@ impl From<NickelValue> for ValueOwned {
 impl From<ValueBlockRc> for ValueOwned {
     fn from(v: ValueBlockRc) -> Self {
         ValueOwned::from(NickelValue::from(v))
-    }
-}
-
-// TODO: with newer malachite (and some more code), we could do this without copying the number data.
-#[derive(Archive, Serialize, Deserialize)]
-pub struct NumberStash {
-    sign: bool,
-    num_limbs: Vec<u64>,
-    denom_limbs: Vec<u64>,
-}
-
-impl From<Number> for NumberStash {
-    fn from(n: Number) -> Self {
-        let sign = n >= 0;
-        let (num, denom) = n.into_numerator_and_denominator();
-        NumberStash {
-            sign,
-            num_limbs: num.into_limbs_asc(),
-            denom_limbs: denom.into_limbs_asc(),
-        }
-    }
-}
-
-impl From<NumberStash> for Number {
-    fn from(nd: NumberStash) -> Self {
-        Number::from_sign_and_naturals(
-            nd.sign,
-            Natural::from_owned_limbs_asc(nd.num_limbs),
-            Natural::from_owned_limbs_asc(nd.denom_limbs),
-        )
     }
 }
 
@@ -221,5 +193,14 @@ where
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         NickelValueRepr::from(self.clone()).serialize(serializer)
+    }
+}
+
+impl<D> Deserialize<NickelValue, D> for ArchivedNickelValueRepr
+where
+    D: Fallible + Pooling + ?Sized,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<NickelValue, <D as Fallible>::Error> {
+        todo!()
     }
 }
