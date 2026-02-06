@@ -1,18 +1,20 @@
+use std::ptr::NonNull;
+
 use malachite::Natural;
 use nickel_lang_parser::{
     ast::Number,
-    files::{FileId, SerializeInterned},
+    files::{DeserializeInterned, FileId, SerializeInterned},
 };
 use rkyv::{
     Archive, Deserialize, Serialize, SerializeUnsized,
-    de::Pooling,
+    de::{ErasedPtr, Pooling, PoolingExt},
     rancor::Fallible,
     rc::{ArchivedRc, Flavor, RcResolver},
     ser::sharing::SharingState,
 };
 
 use crate::{
-    eval::value::{InlineValue, ValueBlockRc},
+    eval::value::{InlineValue, ValueBlockHeader, ValueBlockRc, lazy::ThunkData},
     position::PosIdx,
     term::Term,
 };
@@ -22,7 +24,7 @@ use super::{
     RecordData, SealingKeyData, StringData, Thunk, TypeData, ValueContent,
 };
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[rkyv(bytecheck(bounds(
     __C: rkyv::validation::ArchiveContext,
     __C: rkyv::validation::shared::SharedContext,
@@ -32,7 +34,10 @@ use super::{
     __S: SerializeValue,
     __S::Error: rkyv::rancor::Source,
 ))]
-#[rkyv(deserialize_bounds(__D::Error: rkyv::rancor::Source))]
+#[rkyv(deserialize_bounds(
+    __D: DeserializeValue,
+    __D::Error: rkyv::rancor::Source
+))]
 pub struct ValueOwned {
     pos_idx: PosIdx,
     #[rkyv(omit_bounds)]
@@ -47,7 +52,8 @@ pub enum ValuePayload {
     Array(ArrayData),
     Record(RecordData),
     String(StringData),
-    Thunk(Thunk),
+    // TODO: support thunks
+    //Thunk(ThunkData),
     Term(Term),
     Label(LabelData),
     EnumVariant(EnumVariantData),
@@ -67,7 +73,7 @@ impl From<NickelValue> for ValueOwned {
             ValueContent::Array(lens) => ValuePayload::Array(lens.take().unwrap_or_alloc()),
             ValueContent::Record(lens) => ValuePayload::Record(lens.take().unwrap_or_alloc()),
             ValueContent::String(lens) => ValuePayload::String(lens.take()),
-            ValueContent::Thunk(lens) => ValuePayload::Thunk(lens.take()),
+            ValueContent::Thunk(_) => todo!(),
             ValueContent::Term(term) => ValuePayload::Term(term.take()),
             ValueContent::Label(lens) => ValuePayload::Label(lens.take()),
             ValueContent::EnumVariant(lens) => ValuePayload::EnumVariant(lens.take()),
@@ -84,6 +90,26 @@ impl From<NickelValue> for ValueOwned {
 impl From<ValueBlockRc> for ValueOwned {
     fn from(v: ValueBlockRc) -> Self {
         ValueOwned::from(NickelValue::from(v))
+    }
+}
+
+impl From<ValueOwned> for ValueBlockRc {
+    fn from(v: ValueOwned) -> Self {
+        match v.payload {
+            ValuePayload::Null => todo!(),
+            ValuePayload::Bool(_) => todo!(),
+            ValuePayload::Number(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::Array(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::Record(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::String(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::Term(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::Label(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::EnumVariant(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::ForeignId(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::SealingKey(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::CustomContract(x) => ValueBlockRc::encode(x, v.pos_idx),
+            ValuePayload::Type(x) => ValueBlockRc::encode(x, v.pos_idx),
+        }
     }
 }
 
@@ -122,16 +148,27 @@ impl Archive for InlineValue {
     }
 }
 
+impl<D> Deserialize<InlineValue, D> for rkyv::rend::u32_le
+where
+    D: Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, _deserializer: &mut D) -> Result<InlineValue, D::Error> {
+        use rkyv::rancor::Source;
+        self.to_native().try_into().map_err(D::Error::new)
+    }
+}
+
 #[derive(Archive, Serialize)]
 pub enum NickelValueRepr {
-    Inline(InlineValue),
+    Inline(InlineValue, PosIdx),
     Block(ValueBlockRc),
 }
 
 impl From<NickelValue> for NickelValueRepr {
     fn from(v: NickelValue) -> Self {
         if let Some(inline) = v.as_inline() {
-            NickelValueRepr::Inline(inline)
+            NickelValueRepr::Inline(inline, v.pos_idx())
         } else {
             // unwrap: conversion to inline failed, so it must be a block.
             NickelValueRepr::Block(v.try_into().unwrap())
@@ -146,6 +183,11 @@ pub trait SerializeValue:
     + rkyv::ser::Writer
     + rkyv::ser::Sharing
     + rkyv::ser::Allocator
+{
+}
+
+pub trait DeserializeValue:
+    DeserializeInterned<FileId> + DeserializeInterned<PosIdx> + Fallible + rkyv::de::Pooling
 {
 }
 
@@ -176,6 +218,42 @@ where
     }
 }
 
+impl<D> Deserialize<ValueBlockRc, D> for ArchivedRc<ArchivedValueOwned, NickelValueFlavor>
+where
+    D: DeserializeValue + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<ValueBlockRc, <D as Fallible>::Error> {
+        let address = self.get() as *const ArchivedValueOwned as usize;
+        unsafe fn drop_rc_block(ptr: ErasedPtr) {
+            let rc = unsafe {
+                ValueBlockRc::from_raw(NonNull::new_unchecked(ptr.data_address() as *mut u8))
+            };
+            drop(rc)
+        }
+        match deserializer.start_pooling(address) {
+            rkyv::de::PoolingState::Started => unsafe {
+                // In principle, it should be possible to avoid a copy here by
+                // using deserialize_unsized to deserialize straight into an
+                // allocated value block.
+                let value_owned = self.get().deserialize(deserializer)?;
+                let rc = ValueBlockRc::from(value_owned);
+                let ptr = ErasedPtr::new(NonNull::from(rc.header()));
+
+                deserializer.finish_pooling(address, ptr, drop_rc_block)?;
+                Ok(rc)
+            },
+            rkyv::de::PoolingState::Pending => todo!(), // FIXME: this means a reference cycle
+            rkyv::de::PoolingState::Finished(ptr) => unsafe {
+                let rc =
+                    ValueBlockRc::from_raw(NonNull::new_unchecked(ptr.data_address() as *mut u8));
+                rc.header().inc_ref_count();
+                Ok(rc)
+            },
+        }
+    }
+}
+
 impl<S> Serialize<S> for InlineValue
 where
     S: SerializeValue + ?Sized,
@@ -198,9 +276,19 @@ where
 
 impl<D> Deserialize<NickelValue, D> for ArchivedNickelValueRepr
 where
-    D: Fallible + Pooling + ?Sized,
+    D: DeserializeValue + ?Sized,
+    D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<NickelValue, <D as Fallible>::Error> {
-        todo!()
+        match self {
+            ArchivedNickelValueRepr::Inline(i, pos) => Ok(NickelValue::inline(
+                i.deserialize(deserializer)?,
+                pos.deserialize(deserializer)?,
+            )),
+            ArchivedNickelValueRepr::Block(b) => {
+                let value_block: ValueBlockRc = b.deserialize(deserializer)?;
+                Ok(NickelValue::from(value_block))
+            }
+        }
     }
 }

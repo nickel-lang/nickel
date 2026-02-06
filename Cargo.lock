@@ -3666,6 +3666,7 @@ dependencies = [
  "pkg-config",
  "pretty",
  "pretty_assertions",
+ "ptr_meta",
  "regex",
  "rkyv",
  "rustyline",

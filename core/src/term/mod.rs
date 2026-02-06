@@ -6,6 +6,7 @@ pub mod record;
 pub mod string;
 
 use record::{Field, FieldDeps, Include, RecordData, RecordDeps, SharedMetadata};
+use regex::Regex;
 use rkyv::string::{ArchivedString, StringResolver};
 use smallvec::SmallVec;
 
@@ -1316,6 +1317,21 @@ where
         serializer: &mut S,
     ) -> Result<Self::Resolver, <S as rkyv::rancor::Fallible>::Error> {
         ArchivedString::serialize_from_str(self.0.as_str(), serializer)
+    }
+}
+
+impl<D> rkyv::Deserialize<CompiledRegex, D> for ArchivedString
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(
+        &self,
+        _deserializer: &mut D,
+    ) -> Result<CompiledRegex, <D as rkyv::rancor::Fallible>::Error> {
+        Ok(CompiledRegex(
+            Regex::new(self).map_err(rkyv::rancor::Source::new)?,
+        ))
     }
 }
 

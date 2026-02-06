@@ -1574,6 +1574,37 @@ pub enum InlineValue {
     EmptyRecord = tag_inline(4),
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct InvalidInlineValueError;
+
+impl std::fmt::Display for InvalidInlineValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid inline value")
+    }
+}
+
+impl std::error::Error for InvalidInlineValueError {}
+
+impl TryFrom<u32> for InlineValue {
+    type Error = InvalidInlineValueError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        // FIXME: there must be a better way...
+        for iv in [
+            InlineValue::Null,
+            InlineValue::True,
+            InlineValue::False,
+            InlineValue::EmptyArray,
+            InlineValue::EmptyRecord,
+        ] {
+            if iv as u32 == value {
+                return Ok(iv);
+            }
+        }
+        Err(InvalidInlineValueError)
+    }
+}
+
 /// The discriminating tag for the different kinds of data that can be store in a value block.
 ///////////
 // CAUTION
