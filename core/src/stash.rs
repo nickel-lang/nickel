@@ -1,29 +1,21 @@
 use std::collections::HashSet;
 
-use malachite::Natural;
 use nickel_lang_parser::{
-    ast::Number,
-    files::{DeserializeInterned, Files, Interned, SerializeInterned},
+    files::{DeserializeInterned, Interned, SerializeInterned},
     position::TermPos,
 };
 use rkyv::{
     Archive, Deserialize, Serialize,
     de::Pooling,
     rancor::{Fallible, Source},
-    rc::{ArchivedRc, RcResolver},
-    rend::u32_be,
-    ser::{
-        Allocator, Positional, Sharing, Writer,
-        allocator::{Arena, ArenaHandle},
-        sharing::Share,
-    },
+    ser::{Allocator, Positional, Sharing, Writer, allocator::ArenaHandle, sharing::Share},
     vec::{ArchivedVec, VecResolver},
     with::{ArchiveWith, DeserializeWith, SerializeWith},
 };
 use smallvec::SmallVec;
 
 use crate::{
-    eval::value::{NickelValue, stash::SerializeValue},
+    eval::value::stash::{DeserializeValue, SerializeValue},
     files::FileId,
     position::{PosIdx, PosTable},
 };
@@ -55,6 +47,8 @@ impl std::fmt::Display for UnstashError {
         }
     }
 }
+
+impl std::error::Error for UnstashError {}
 
 pub struct Stasher<'a> {
     inner: rkyv::ser::Serializer<
@@ -159,8 +153,20 @@ pub struct Unstasher {
     pool: rkyv::de::Pool,
     pub(crate) allowed_files: HashSet<FileId>,
     // TODO: maybe deduplicate positions on deserialization?
-    pub(crate) pos_table: PosTable,
+    pub pos_table: PosTable,
 }
+
+impl Unstasher {
+    pub fn new(allowed_files: impl IntoIterator<Item = FileId>, pos_table: PosTable) -> Self {
+        Unstasher {
+            pool: rkyv::de::Pool::new(),
+            allowed_files: allowed_files.into_iter().collect(),
+            pos_table,
+        }
+    }
+}
+
+impl<E: rkyv::rancor::Source> DeserializeValue for rkyv::rancor::Strategy<Unstasher, E> {}
 
 impl DeserializeInterned<FileId> for Unstasher {
     fn deserialize_id(&mut self, raw_id: u32) -> Result<FileId, Self::Error> {

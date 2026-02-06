@@ -1,27 +1,26 @@
 use std::ptr::NonNull;
 
-use malachite::Natural;
 use nickel_lang_parser::{
     ast::Number,
     files::{DeserializeInterned, FileId, SerializeInterned},
 };
 use rkyv::{
     Archive, Deserialize, Serialize, SerializeUnsized,
-    de::{ErasedPtr, Pooling, PoolingExt},
+    de::ErasedPtr,
     rancor::Fallible,
     rc::{ArchivedRc, Flavor, RcResolver},
     ser::sharing::SharingState,
 };
 
 use crate::{
-    eval::value::{InlineValue, ValueBlockHeader, ValueBlockRc, lazy::ThunkData},
+    eval::value::{InlineValue, ValueBlockRc},
     position::PosIdx,
     term::Term,
 };
 
 use super::{
     ArrayData, CustomContractData, EnumVariantData, ForeignIdData, LabelData, NickelValue,
-    RecordData, SealingKeyData, StringData, Thunk, TypeData, ValueContent,
+    RecordData, SealingKeyData, StringData, TypeData, ValueContent,
 };
 
 #[derive(Archive, Serialize, Deserialize)]

@@ -63,13 +63,10 @@ use crate::{
 
 use std::{collections::HashSet, convert::Infallible};
 
+use nickel_lang_parser::ast::AstAlloc;
 pub use nickel_lang_parser::typ::{
     DictTypeFlavour, EnumRowF, EnumRowsF, RecordRowF, RecordRowsF, TypeF, VarKind,
     VarKindDiscriminant,
-};
-use nickel_lang_parser::{
-    ast::AstAlloc,
-    files::{DeserializeInterned, FileId},
 };
 
 // Concrete, recursive definition of Nickel types from the generic `XxxF` definitions. This is

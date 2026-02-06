@@ -12,6 +12,7 @@ readme.workspace = true
 
 [dependencies]
 nickel-lang-core.workspace = true
+rkyv.workspace = true
 
 [build-dependencies]
 nickel-lang-core.workspace = true

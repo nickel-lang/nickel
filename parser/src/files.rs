@@ -42,6 +42,22 @@ where
     }
 }
 
+impl<T, D, E> DeserializeInterned<T> for rkyv::rancor::Strategy<D, E>
+where
+    D: DeserializeInterned<T>,
+    D::Error: std::error::Error + Send + Sync + 'static,
+    T: Interned,
+    E: rkyv::rancor::Source,
+{
+    fn deserialize_id(&mut self, value: T::Resolved) -> Result<T, E> {
+        use rkyv::rancor::Source;
+        use std::ops::DerefMut;
+        self.deref_mut()
+            .deserialize_id(value)
+            .map_err(|e| <E as Source>::new(e))
+    }
+}
+
 /// A file identifier, which can be used to access a file in a [`Files`].
 ///
 /// Note that there is no protection against using a `FileId` for the wrong
