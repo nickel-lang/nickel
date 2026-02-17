@@ -35,9 +35,10 @@ use nickel_lang_core::{
     },
     files::Files,
     identifier::{Ident, LocIdent},
+    position::PosIdx,
     serialize::{ExportFormat, to_string, validate},
     term::{
-        self,
+        self, RuntimeContract,
         record::{Field, RecordData},
     },
 };
@@ -374,12 +375,20 @@ pub struct RecordIter<'a> {
 /// This is a reference internally, and borrows from data owned by an [`Expr`].
 #[derive(Clone)]
 pub struct Array<'a> {
-    array: Container<&'a ArrayData>,
+    /// It would be nice if this were a `Container<&ArrayData>`, but we need to
+    /// keep track of the value's position (for pending contract application).
+    /// And we can't add an extra field because we need to be pointer-sized.
+    ///
+    /// So we just store a `&NickelValue` and promise that it points to an
+    /// array.
+    value: &'a NickelValue,
 }
 
 /// An iterator over elements in an [`Array`].
 pub struct ArrayIter<'a> {
     inner: Option<<&'a value::Array as IntoIterator>::IntoIter>,
+    pos: PosIdx,
+    pending_contracts: &'a [RuntimeContract],
 }
 
 /// A Nickel number.
@@ -504,7 +513,7 @@ impl Expr {
     /// The returned array handle can be used to access the
     /// array's elements.
     pub fn as_array(&self) -> Option<Array<'_>> {
-        self.value.as_array().map(|array| Array { array })
+        self.value.as_array().map(|_| Array { value: &self.value })
     }
 
     /// Is this expression an array?
@@ -561,8 +570,8 @@ impl Record<'_> {
     pub fn value_by_name(&self, key: &str) -> Option<Expr> {
         self.data
             .get(Ident::new(key).into())
-            .and_then(|fld| fld.value.as_ref())
-            .map(|rt| Expr { value: rt.clone() })
+            .and_then(|fld| fld.value_with_pending_contracts())
+            .map(|value| Expr { value })
     }
 
     /// Return the field name and value at the given index.
@@ -575,7 +584,8 @@ impl Record<'_> {
             data.fields.get_index(idx).map(|(key, fld)| {
                 (
                     key.label(),
-                    fld.value.as_ref().map(|rt| Expr { value: rt.clone() }),
+                    fld.value_with_pending_contracts()
+                        .map(|value| Expr { value }),
                 )
             })
         })
@@ -611,21 +621,32 @@ impl<'a> Iterator for RecordIter<'a> {
     }
 }
 
-impl Array<'_> {
+impl<'a> Array<'a> {
+    /// Our value field is guaranteed to point to an array. Unwrap that array data.
+    fn array(&self) -> Container<&'a ArrayData> {
+        // unwrap: we're guaranteed to be an array
+        self.value.as_array().unwrap()
+    }
+
     /// Returns the number of elements in this array.
     pub fn len(&self) -> usize {
-        self.array.len()
+        self.array().len()
     }
 
     /// Is this array empty?
     pub fn is_empty(&self) -> bool {
-        self.array.is_empty()
+        self.array().is_empty()
     }
 
     /// Returns the element at the requested index, if the index is in-bounds.
     pub fn get(&self, idx: usize) -> Option<Expr> {
-        self.array.get(idx).map(|value| Expr {
-            value: value.clone(),
+        let arr = self.array();
+        arr.get(idx).map(|value| Expr {
+            value: RuntimeContract::apply_all(
+                value.clone(),
+                arr.iter_pending_contracts().cloned(),
+                self.value.pos_idx(),
+            ),
         })
     }
 
@@ -640,8 +661,15 @@ impl<'a> IntoIterator for Array<'a> {
     type IntoIter = ArrayIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
+        let arr = self.array();
+        let pending_contracts = match arr {
+            Container::Empty => &[][..],
+            Container::Alloc(arr) => &arr.pending_contracts,
+        };
         ArrayIter {
-            inner: self.array.into_opt().map(|data| (&data.array).into_iter()),
+            inner: arr.into_opt().map(|data| (&data.array).into_iter()),
+            pos: self.value.pos_idx(),
+            pending_contracts,
         }
     }
 }
@@ -650,10 +678,13 @@ impl<'a> Iterator for ArrayIter<'a> {
     type Item = Expr;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner
-            .as_mut()?
-            .next()
-            .map(|rt| Expr { value: rt.clone() })
+        self.inner.as_mut()?.next().map(|value| Expr {
+            value: RuntimeContract::apply_all(
+                value.clone(),
+                self.pending_contracts.iter().cloned(),
+                self.pos,
+            ),
+        })
     }
 }
 
@@ -778,5 +809,30 @@ mod tests {
         };
         let mut out = Vec::new();
         err.format(&mut out, ErrorFormat::Text).unwrap();
+    }
+
+    #[test]
+    fn pending_contracts() {
+        let mut ctxt = Context::new();
+
+        let expr = ctxt
+            .eval_shallow("{ foo = 1 } | { foo | std.contract.Equal 2 }")
+            .unwrap();
+
+        let rec = expr.as_record().unwrap();
+        let foo = rec.value_by_name("foo").unwrap();
+        assert!(ctxt.eval_expr_shallow(foo).is_err());
+
+        let expr = ctxt
+            .eval_shallow("[1] | Array (std.contract.Equal 2)")
+            .unwrap();
+
+        let arr = expr.as_array().unwrap();
+        let elt = arr.get(0).unwrap();
+        assert!(ctxt.eval_expr_shallow(elt).is_err());
+
+        for elt in arr.iter() {
+            assert!(ctxt.eval_expr_shallow(elt).is_err());
+        }
     }
 }

@@ -147,30 +147,23 @@ impl nickel_array {
     ///
     /// # Safety
     ///
-    /// Assumes that `this` was originally a valid pointer to a `term::array::Array`, or is `null`
-    /// (the array is then considered empty).
+    /// Assumes that `this` was originally a valid pointer to a `NickelValue` that represents
+    /// an array.
     unsafe fn as_rust(this: &*const Self) -> Array<'_> {
-        if this.is_null() {
-            Array {
-                array: Container::Empty,
-            }
-        } else {
-            Array {
-                // Safety: pre-condition of this unsafe function
-                array: Container::Alloc(unsafe {
-                    (*this as *const value::ArrayData).as_ref().unwrap()
-                }),
-            }
+        // Previous versions of this function allowed null pointers (which were interpreted as
+        // empty arrays). We don't allow that anymore, so assert that.
+        debug_assert!(!this.is_null());
+
+        Array {
+            // Safety: pre-condition of this unsafe function
+            value: unsafe { (*this as *const NickelValue).as_ref().unwrap() },
         }
     }
 }
 
 impl<'a> From<Array<'a>> for *const nickel_array {
     fn from(arr: Array<'a>) -> Self {
-        match arr.array {
-            Container::Empty => ptr::null(),
-            Container::Alloc(data) => data as *const _ as *const nickel_array,
-        }
+        arr.value as *const NickelValue as *const nickel_array
     }
 }
 
@@ -969,9 +962,12 @@ pub unsafe extern "C" fn nickel_number_as_rational(
 /// The number of elements of this Nickel array.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nickel_array_len(arr: *const nickel_array) -> usize {
-    // Safety: `arr` is expected to be a valid pointer to a nickel array, or `null`, which is
-    // handled by `nickel_array::as_rust`.
-    unsafe { nickel_array::as_rust(&arr).len() }
+    if arr.is_null() {
+        0
+    } else {
+        // Safety: `arr` is expected to be a valid pointer to a nickel array.
+        unsafe { nickel_array::as_rust(&arr).len() }
+    }
 }
 
 /// Retrieve the element at the given array index.
@@ -988,8 +984,11 @@ pub unsafe extern "C" fn nickel_array_get(
     idx: usize,
     mut out_expr: *mut nickel_expr,
 ) {
-    // Safety: `arr` is expected to be a valid pointer to a nickel array, or `null`, which is
-    // handled by `nickel_array::as_rust`.
+    if arr.is_null() {
+        panic!("cannot index into empty array");
+    }
+
+    // Safety: `arr` is expected to be a valid pointer to a nickel array.
     //
     // `out_expr` is required to be a valid pointer to an allocated `nickel_expr`.
     unsafe {
