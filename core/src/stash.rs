@@ -1,0 +1,270 @@
+use std::collections::HashSet;
+
+use nickel_lang_parser::{
+    files::{DeserializeInterned, Interned, SerializeInterned},
+    position::TermPos,
+};
+use rkyv::{
+    Archive, Deserialize, Serialize,
+    de::Pooling,
+    rancor::{Fallible, Source},
+    ser::{Allocator, Positional, Sharing, Writer, allocator::ArenaHandle, sharing::Share},
+    vec::{ArchivedVec, VecResolver},
+    with::{ArchiveWith, DeserializeWith, SerializeWith},
+};
+use smallvec::SmallVec;
+
+use crate::{
+    eval::value::stash::{DeserializeValue, SerializeValue},
+    files::FileId,
+    position::{PosIdx, PosTable},
+};
+
+#[derive(Debug)]
+pub enum StashError {
+    InvalidFile { id: FileId },
+}
+
+impl std::fmt::Display for StashError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StashError::InvalidFile { id } => write!(f, "file {id:?} isn't in the whitelist"),
+        }
+    }
+}
+
+impl std::error::Error for StashError {}
+
+#[derive(Debug)]
+pub enum UnstashError {
+    InvalidFile { id: u32 },
+}
+
+impl std::fmt::Display for UnstashError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnstashError::InvalidFile { id } => write!(f, "unknown file id {id}"),
+        }
+    }
+}
+
+impl std::error::Error for UnstashError {}
+
+pub struct Stasher<'a> {
+    inner: rkyv::ser::Serializer<
+        Vec<u8>,
+        rkyv::ser::allocator::ArenaHandle<'a>,
+        rkyv::ser::sharing::Share,
+    >,
+    allowed_files: HashSet<FileId>,
+    pos_table: &'a PosTable,
+}
+
+impl SerializeValue for Stasher<'_> {}
+impl<E: rkyv::rancor::Source> SerializeValue for rkyv::rancor::Strategy<Stasher<'_>, E> {}
+
+impl<'a> Stasher<'a> {
+    pub fn new(
+        pos_table: &'a PosTable,
+        allowed_files: impl IntoIterator<Item = FileId>,
+        arena: ArenaHandle<'a>,
+    ) -> Self {
+        Stasher {
+            inner: rkyv::ser::Serializer::new(Vec::new(), arena, Share::new()),
+            allowed_files: allowed_files.into_iter().collect(),
+            pos_table,
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.inner.into_writer()
+    }
+}
+
+impl SerializeInterned<FileId> for Stasher<'_> {
+    fn serialize_id(&mut self, id: FileId) -> Result<(), Self::Error> {
+        if self.allowed_files.contains(&id) {
+            Ok(())
+        } else {
+            Err(rkyv::rancor::Error::new(StashError::InvalidFile { id }))
+        }
+    }
+}
+
+impl Interned for PosIdx {
+    type Resolved = TermPos;
+}
+
+impl SerializeInterned<PosIdx> for Stasher<'_> {
+    fn serialize_id(&mut self, id: PosIdx) -> Result<(), Self::Error> {
+        self.pos_table.get(id).serialize(self)?;
+        Ok(())
+    }
+}
+
+impl rkyv::rancor::Fallible for Stasher<'_> {
+    type Error = rkyv::rancor::Error;
+}
+
+impl<'a> Positional for Stasher<'a> {
+    fn pos(&self) -> usize {
+        self.inner.pos()
+    }
+}
+
+impl<'a, E> Writer<E> for Stasher<'a> {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), E> {
+        self.inner.write(bytes)
+    }
+}
+
+unsafe impl<'a, E> Allocator<E> for Stasher<'a> {
+    unsafe fn push_alloc(
+        &mut self,
+        layout: std::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, E> {
+        // Safety: we're just wrapping the inner serializer so our safety requirements
+        // are the same as theirs.
+        unsafe { self.inner.push_alloc(layout) }
+    }
+
+    unsafe fn pop_alloc(
+        &mut self,
+        ptr: std::ptr::NonNull<u8>,
+        layout: std::alloc::Layout,
+    ) -> Result<(), E> {
+        // Safety: we're just wrapping the inner serializer so our safety requirements
+        // are the same as theirs.
+        unsafe { self.inner.pop_alloc(ptr, layout) }
+    }
+}
+
+impl<'a, E: rkyv::rancor::Source> Sharing<E> for Stasher<'a> {
+    fn start_sharing(&mut self, address: usize) -> rkyv::ser::sharing::SharingState {
+        <rkyv::ser::Serializer<_, _, _> as Sharing<E>>::start_sharing(&mut self.inner, address)
+    }
+
+    fn finish_sharing(&mut self, address: usize, pos: usize) -> Result<(), E> {
+        self.inner.finish_sharing(address, pos)
+    }
+}
+
+pub struct Unstasher {
+    pool: rkyv::de::Pool,
+    pub(crate) allowed_files: HashSet<FileId>,
+    // TODO: maybe deduplicate positions on deserialization?
+    pub pos_table: PosTable,
+}
+
+impl Unstasher {
+    pub fn new(allowed_files: impl IntoIterator<Item = FileId>, pos_table: PosTable) -> Self {
+        Unstasher {
+            pool: rkyv::de::Pool::new(),
+            allowed_files: allowed_files.into_iter().collect(),
+            pos_table,
+        }
+    }
+}
+
+impl<E: rkyv::rancor::Source> DeserializeValue for rkyv::rancor::Strategy<Unstasher, E> {}
+
+impl DeserializeInterned<FileId> for Unstasher {
+    fn deserialize_id(&mut self, raw_id: u32) -> Result<FileId, Self::Error> {
+        let id = FileId::from_raw(raw_id);
+        if self.allowed_files.contains(&id) {
+            Ok(id)
+        } else {
+            Err(UnstashError::InvalidFile { id: raw_id })
+        }
+    }
+}
+
+impl DeserializeInterned<PosIdx> for Unstasher {
+    fn deserialize_id(&mut self, pos: TermPos) -> Result<PosIdx, Self::Error> {
+        Ok(self.pos_table.push(pos))
+    }
+}
+
+// This isn't allowed: "type parameter `D` must be used as the type parameter for some local type"
+// impl<D> Deserialize<FileId, D> for rkyv::rend::u32_le
+// where
+//     D: Fallible + DeserializeInterned<FileId> + ?Sized,
+// {
+//     fn deserialize(&self, deserializer: &mut D) -> Result<FileId, <D as Fallible>::Error> {
+//         todo!()
+//     }
+// }
+
+impl rkyv::rancor::Fallible for Unstasher {
+    type Error = UnstashError;
+}
+
+impl<E: rkyv::rancor::Source> Pooling<E> for Unstasher {
+    fn start_pooling(&mut self, address: usize) -> rkyv::de::PoolingState {
+        <rkyv::de::Pool as Pooling<E>>::start_pooling(&mut self.pool, address)
+    }
+
+    unsafe fn finish_pooling(
+        &mut self,
+        address: usize,
+        ptr: rkyv::de::ErasedPtr,
+        drop: unsafe fn(rkyv::de::ErasedPtr),
+    ) -> Result<(), E> {
+        // Safety: we're just wrapping the inner pool so our safety requirements
+        // are the same as theirs.
+        unsafe { self.pool.finish_pooling(address, ptr, drop) }
+    }
+}
+
+pub(crate) struct ArchiveSmallVec;
+
+impl<A> ArchiveWith<SmallVec<A>> for ArchiveSmallVec
+where
+    A: smallvec::Array,
+    A::Item: Archive,
+{
+    type Archived = ArchivedVec<<A::Item as Archive>::Archived>;
+    type Resolver = VecResolver;
+
+    fn resolve_with(
+        field: &SmallVec<A>,
+        resolver: Self::Resolver,
+        out: rkyv::Place<Self::Archived>,
+    ) {
+        ArchivedVec::resolve_from_len(field.len(), resolver, out);
+    }
+}
+
+impl<A, S> SerializeWith<SmallVec<A>, S> for ArchiveSmallVec
+where
+    S: Fallible + rkyv::ser::Writer + rkyv::ser::Allocator + ?Sized,
+    A: smallvec::Array,
+    A::Item: Serialize<S>,
+{
+    fn serialize_with(
+        field: &SmallVec<A>,
+        serializer: &mut S,
+    ) -> Result<Self::Resolver, <S as rkyv::rancor::Fallible>::Error> {
+        ArchivedVec::serialize_from_slice(field.as_slice(), serializer)
+    }
+}
+
+impl<A, D> DeserializeWith<ArchivedVec<<A::Item as Archive>::Archived>, SmallVec<A>, D>
+    for ArchiveSmallVec
+where
+    A: smallvec::Array,
+    A::Item: Archive,
+    <A::Item as Archive>::Archived: Deserialize<A::Item, D>,
+    D: Fallible + ?Sized,
+{
+    fn deserialize_with(
+        vec: &ArchivedVec<<A::Item as Archive>::Archived>,
+        deserializer: &mut D,
+    ) -> Result<SmallVec<A>, <D as Fallible>::Error> {
+        let mut ret = SmallVec::with_capacity(vec.len());
+        for item in vec.as_slice() {
+            ret.push(item.deserialize(deserializer)?);
+        }
+        Ok(ret)
+    }
+}

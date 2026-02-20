@@ -10,17 +10,107 @@ use std::{
 use codespan::ByteIndex;
 use codespan_reporting::files::Error;
 use nickel_lang_vector::Vector;
+use rkyv::{rancor::Fallible, ser::Writer};
 
 use crate::position::RawSpan;
+
+pub trait Interned {
+    type Resolved;
+}
+
+pub trait SerializeInterned<Id: Interned>: Fallible {
+    fn serialize_id(&mut self, id: Id) -> Result<(), Self::Error>;
+}
+
+pub trait DeserializeInterned<Id: Interned>: Fallible {
+    fn deserialize_id(&mut self, value: Id::Resolved) -> Result<Id, Self::Error>;
+}
+
+impl<T, S, E> SerializeInterned<T> for rkyv::rancor::Strategy<S, E>
+where
+    S: SerializeInterned<T>,
+    S::Error: std::error::Error + Send + Sync + 'static,
+    T: Interned,
+    E: rkyv::rancor::Source,
+{
+    fn serialize_id(&mut self, id: T) -> Result<(), E> {
+        use rkyv::rancor::Source;
+        use std::ops::DerefMut;
+        self.deref_mut()
+            .serialize_id(id)
+            .map_err(|e| <E as Source>::new(e))
+    }
+}
+
+impl<T, D, E> DeserializeInterned<T> for rkyv::rancor::Strategy<D, E>
+where
+    D: DeserializeInterned<T>,
+    D::Error: std::error::Error + Send + Sync + 'static,
+    T: Interned,
+    E: rkyv::rancor::Source,
+{
+    fn deserialize_id(&mut self, value: T::Resolved) -> Result<T, E> {
+        use rkyv::rancor::Source;
+        use std::ops::DerefMut;
+        self.deref_mut()
+            .deserialize_id(value)
+            .map_err(|e| <E as Source>::new(e))
+    }
+}
 
 /// A file identifier, which can be used to access a file in a [`Files`].
 ///
 /// Note that there is no protection against using a `FileId` for the wrong
 /// instance of `Files`.
 #[derive(
-    Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+    Copy,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    rkyv::Archive,
 )]
 pub struct FileId(u32);
+
+impl FileId {
+    /// Construct a `FileId` from an integer id.
+    ///
+    /// This is used for serialization and deserialization. For most other uses,
+    /// it's better to get a `FileId` straight from a [`Files`], because then
+    /// you're guaranteed to have a valid id (for that `Files`, at least).
+    pub fn from_raw(id: u32) -> Self {
+        FileId(id)
+    }
+}
+
+impl Interned for FileId {
+    type Resolved = u32;
+}
+
+impl<S> rkyv::Serialize<S> for FileId
+where
+    S: SerializeInterned<FileId> + Writer + ?Sized,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        serializer.serialize_id(*self)?;
+        Ok(crate::files::FileIdResolver(()))
+    }
+}
+
+impl<D> rkyv::Deserialize<FileId, D> for ArchivedFileId
+where
+    D: DeserializeInterned<FileId> + ?Sized,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<FileId, D::Error> {
+        let id: u32 = self.0.to_native();
+        deserializer.deserialize_id(id)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct File {
