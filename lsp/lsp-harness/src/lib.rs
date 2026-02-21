@@ -232,6 +232,13 @@ impl TestHarness {
         self.out.push(b'\n');
     }
 
+    // Send a request to the language server and immediately cancel it.
+    pub fn request_and_cancel<T: LspRequest>(&mut self, params: T::Params) -> jsonrpc::Response {
+        self.srv
+            .send_request_with_options::<T>(params, true)
+            .unwrap()
+    }
+
     pub fn request_dyn(&mut self, req: Request) {
         match req {
             Request::GotoDefinition(d) => self.request::<GotoDefinition>(d),
@@ -310,5 +317,11 @@ impl TestHarness {
                 jsonrpc::ServerMessage::Response(_) => {}
             }
         }
+    }
+
+    /// Sends a request to pause the language server and returns without waiting for a response.
+    /// This can be used to test queuing and cancellation behavior.
+    pub fn pause_language_server(&mut self) {
+        self.srv.send_pause().unwrap();
     }
 }

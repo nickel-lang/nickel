@@ -7,14 +7,14 @@ use log::debug;
 use lsp_server::ResponseError;
 use lsp_types::{
     notification::{
-        DidChangeTextDocument, DidOpenTextDocument, Exit, Initialized,
+        Cancel, DidChangeTextDocument, DidOpenTextDocument, Exit, Initialized,
         Notification as LspNotification,
     },
-    request::{GotoDefinition, Initialize, Request as LspRequest, Shutdown},
-    ClientCapabilities, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
-    GotoDefinitionParams, GotoDefinitionResponse, InitializeParams, InitializedParams, Position,
-    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentPositionParams, Url,
-    VersionedTextDocumentIdentifier, WorkDoneProgressParams,
+    request::{ExecuteCommand, GotoDefinition, Initialize, Request as LspRequest, Shutdown},
+    CancelParams, ClientCapabilities, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
+    ExecuteCommandParams, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
+    InitializedParams, Position, TextDocumentContentChangeEvent, TextDocumentIdentifier,
+    TextDocumentPositionParams, Url, VersionedTextDocumentIdentifier, WorkDoneProgressParams,
 };
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -40,6 +40,7 @@ pub struct Server {
     /// A buffer for notifications that have been received from the lsp but not
     /// yet delivered to the client.
     pending_notifications: Vec<Notification>,
+    pause_request_ids: Vec<u32>,
 }
 
 /// A dynamically typed message from the LSP server.
@@ -90,10 +91,10 @@ pub struct Response {
     /// The result. The structure of this should be determined by whatever
     /// request method this is a response to. But it hasn't been checked yet.
     #[serde(default)]
-    result: serde_json::Value,
+    pub result: serde_json::Value,
     /// Populated if the request generated an error.
     #[serde(default)]
-    error: Option<ResponseError>,
+    pub error: Option<ResponseError>,
 }
 
 impl Drop for Server {
@@ -133,6 +134,7 @@ impl Server {
             write: Box::new(stdin),
             read: Box::new(BufReader::new(stdout)),
             pending_notifications: Vec::new(),
+            pause_request_ids: Vec::new(),
             id: 0,
         };
 
@@ -207,6 +209,21 @@ impl Server {
 
     /// Send a request to the language server and wait for the response.
     pub fn send_request<T: LspRequest>(&mut self, params: T::Params) -> Result<T::Result> {
+        let resp = self.send_request_with_options::<T>(params, false)?;
+        if let Some(err) = resp.error {
+            bail!(err.message);
+        }
+        Ok(serde_json::value::from_value(resp.result)?)
+    }
+
+    /// Send a request to the language server and wait for the response.
+    /// Optionally allows a cancellation notification to be sent before waiting for a response.
+    /// This does not check the response for errors first, and will return whatever was received.
+    pub fn send_request_with_options<T: LspRequest>(
+        &mut self,
+        params: T::Params,
+        cancel: bool,
+    ) -> Result<Response> {
         self.id += 1;
 
         let req = SendRequest::<T> {
@@ -216,17 +233,48 @@ impl Server {
             id: self.id,
         };
         self.send(&req)?;
-        let resp = self.recv_response()?;
-        if resp.id != self.id {
-            // In general, LSP responses can come out of order. But because we always
-            // wait for a response after sending a request, there's only one outstanding
-            // response.
-            bail!("expected id {}, got {}", self.id, resp.id);
+
+        if cancel {
+            self.send_notification::<Cancel>(CancelParams {
+                id: lsp_types::NumberOrString::Number(self.id.try_into().unwrap()),
+            })?;
         }
-        if let Some(err) = resp.error {
-            bail!(err.message);
+
+        loop {
+            let resp = self.recv_response()?;
+            if self.pause_request_ids.contains(&resp.id) {
+                // In order to test queuing behavior, we send an EvalCommand request that pauses
+                // the language server. We don't wait for that request to respond like we do other
+                // requests, so it's possible that we'll receive a response for a pause request
+                // ahead of the response for the request we sent. Responses to these pause requests
+                // can be ignored.
+                continue;
+            } else if resp.id != self.id {
+                // In general, LSP responses can come out of order. Apart from the pause exception
+                // handled above, we always wait for a response after sending a request, so there's
+                // only one outstanding response.
+                bail!("expected id {}, got {}", self.id, resp.id);
+            }
+            return Ok(resp);
         }
-        Ok(serde_json::value::from_value(resp.result)?)
+    }
+
+    /// Send a request to the language server that will pause it, and don't wait for a response.
+    /// This can be used to test queueing and cancellation behavior.
+    pub fn send_pause(&mut self) -> Result<()> {
+        self.id += 1;
+        self.pause_request_ids.push(self.id);
+
+        let req = SendRequest::<ExecuteCommand> {
+            jsonrpc: "2.0",
+            method: ExecuteCommand::METHOD,
+            id: self.id,
+            params: ExecuteCommandParams {
+                command: "pause".into(),
+                ..Default::default()
+            },
+        };
+        self.send(&req)
     }
 
     /// Send a notification to the language server.

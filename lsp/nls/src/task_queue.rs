@@ -5,11 +5,13 @@ use std::{
 
 use anyhow::Result;
 use log::debug;
-use lsp_server::{Message, Notification};
+use lsp_server::{Message, Notification, RequestId};
 use lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Url,
+    CancelParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, NumberOrString, Url,
     notification::{
-        DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification as _,
+        Cancel, DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument,
+        Notification as NotificationTrait,
     },
     request::{ExecuteCommand, Request as RequestTrait},
 };
@@ -22,6 +24,8 @@ pub enum Task {
     HandleDocumentSync(DocumentSync),
     /// Publish diagnostics for a file
     Diagnostics(DiagnosticsRequest),
+    /// Cancel a request.
+    CancelRequest(RequestId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +70,7 @@ pub struct TaskQueue {
     open_files: HashSet<Url>,
     /// The set of files that need updated diagnostics published for them.
     stale_diagnostics: HashSet<Url>,
+    cancelled_requests: HashSet<RequestId>,
 }
 
 impl TaskQueue {
@@ -74,6 +79,7 @@ impl TaskQueue {
             request_or_sync: VecDeque::new(),
             open_files: HashSet::new(),
             stale_diagnostics: HashSet::new(),
+            cancelled_requests: HashSet::new(),
         }
     }
 
@@ -119,6 +125,14 @@ impl TaskQueue {
                 let params =
                     serde_json::from_value::<DidChangeTextDocumentParams>(notification.params)?;
                 self.add_sync_task(DocumentSync::Change(params));
+            }
+            Cancel::METHOD => {
+                let params = serde_json::from_value::<CancelParams>(notification.params)?;
+                let id = match params.id {
+                    NumberOrString::Number(id) => id.into(),
+                    NumberOrString::String(id) => id.into(),
+                };
+                self.cancelled_requests.insert(id);
             }
             method => debug!("No handler for notification type {}", method),
         };
@@ -193,6 +207,10 @@ impl TaskQueue {
         match self.request_or_sync.pop_front() {
             Some(ReqOrSync::DocumentSync(task)) => Some(Task::HandleDocumentSync(task)),
             Some(ReqOrSync::Request(req)) => {
+                if self.cancelled_requests.contains(&req.id) {
+                    self.cancelled_requests.remove(&req.id);
+                    return Some(Task::CancelRequest(req.id));
+                }
                 let task = match categorize(&req) {
                     RequestCategory::EvalCommand(uri) => {
                         // The eval command publishes the new diagnostics for a file
@@ -230,8 +248,15 @@ impl TaskQueue {
     }
 
     pub fn next_task(&mut self) -> Option<Task> {
-        self.next_request_or_sync()
-            .or_else(|| self.next_diagnostic())
+        let task = self
+            .next_request_or_sync()
+            .or_else(|| self.next_diagnostic());
+        if task.is_none() {
+            // If there's nothing in the queue, then any requests in the cancelled requests must
+            // have already been processed. We can clean up whatever is remaining.
+            self.cancelled_requests.clear();
+        }
+        task
     }
 }
 
@@ -497,5 +522,97 @@ mod test {
         queue.add_diagnostics_task("file:///test.ncl".parse().unwrap());
         assert_matches!(queue.next_task().unwrap(), Task::Diagnostics(_));
         assert_matches!(queue.next_task().unwrap(), Task::HandleRequest(_));
+    }
+
+    #[test]
+    fn cancel_request_int_id() {
+        let mut queue = TaskQueue::new();
+        let req = Request::new(
+            123.into(),
+            ExecuteCommand::METHOD.into(),
+            json!({
+                "command":"eval",
+                "arguments":[{"uri": "file:///test.ncl"}]
+            }),
+        );
+
+        let cancel = Notification::new(
+            Cancel::METHOD.into(),
+            json!({
+                "id": 123
+            }),
+        );
+
+        queue.queue_message(Message::Request(req)).unwrap();
+        queue.queue_message(Message::Notification(cancel)).unwrap();
+        let task = queue.next_task().unwrap();
+        match task {
+            Task::CancelRequest(id) => assert_eq!(id, 123.into()),
+            _ => panic!("Wrong task type"),
+        }
+        // The request should actually be cancelled now.
+        assert!(queue.next_task().is_none());
+    }
+
+    #[test]
+    fn cancel_request_str_id() {
+        let mut queue = TaskQueue::new();
+        let req = Request::new(
+            "123".to_string().into(),
+            ExecuteCommand::METHOD.into(),
+            json!({
+                "command":"eval",
+                "arguments":[{"uri": "file:///test.ncl"}]
+            }),
+        );
+
+        let cancel = Notification::new(
+            Cancel::METHOD.into(),
+            json!({
+                "id": "123"
+            }),
+        );
+
+        queue.queue_message(Message::Request(req)).unwrap();
+        queue.queue_message(Message::Notification(cancel)).unwrap();
+        let task = queue.next_task().unwrap();
+        match task {
+            Task::CancelRequest(id) => assert_eq!(id, "123".to_string().into()),
+            _ => panic!("Wrong task type"),
+        }
+        // The request should actually be cancelled now.
+        assert!(queue.next_task().is_none());
+    }
+
+    #[test]
+    fn clear_cancelled_requests() {
+        let mut queue = TaskQueue::new();
+        let id = 123;
+        let req = Request::new(
+            id.into(),
+            ExecuteCommand::METHOD.into(),
+            json!({
+                "command":"eval",
+                "arguments":[{"uri": "file:///test.ncl"}]
+            }),
+        );
+
+        let cancel = Notification::new(
+            Cancel::METHOD.into(),
+            json!({
+                "id": id
+            }),
+        );
+
+        queue.queue_message(Message::Request(req)).unwrap();
+        // The request has already been taken out of the queue before the cancel notification
+        // arrives.
+        let task = queue.next_task().unwrap();
+        assert_matches!(task, Task::HandleRequest(_));
+
+        queue.queue_message(Message::Notification(cancel)).unwrap();
+        assert!(queue.next_task().is_none());
+
+        assert_eq!(0, queue.cancelled_requests.len());
     }
 }

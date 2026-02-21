@@ -16,6 +16,15 @@ pub fn handle_command(
             server.reply(Response::new_ok(req, None::<()>));
             Ok(())
         }
+        #[cfg(debug_assertions)]
+        "pause" => {
+            // This command is only used by integration tests. It is intended to simulate
+            // an operation taking some amount of time so that the behavior of requests
+            // queuing behind it can be tested.
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            server.reply(Response::new_ok(req, None::<()>));
+            Ok(())
+        }
         _ => Err(Error::CommandNotFound(params.command).into()),
     }
 }

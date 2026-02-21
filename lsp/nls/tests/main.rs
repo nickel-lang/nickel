@@ -1,4 +1,5 @@
-use lsp_types::Url;
+use lsp_server::ErrorCode;
+use lsp_types::{ExecuteCommandParams, Url, request::ExecuteCommand};
 use nickel_lang_utils::project_root::project_root;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -133,6 +134,27 @@ fn refresh_missing_imports() {
     assert_eq!(test_diags.uri, test_uri);
     assert!(dep_diags.diagnostics.is_empty());
     assert_eq!(dep_diags.uri, dep_uri);
+}
+
+// This test is potentially subject to flakiness due to a race condition with how LSP messages are
+// read from stdin. It's possible for the main loop to check for new messages and not find one even
+// if there's a message waiting from stdin, and to begin handling the request without knowing that
+// it has already been cancelled. To fix this, the main loop will wait with a short timeout when it
+// tries to read a new message. The timeout it has set is well over what was needed to make this
+// test work reliably in my testing, but I can't guarantee the timeout is correct under all
+// conditions or all hardware.
+#[test]
+fn cancel_request() {
+    let _ = env_logger::try_init();
+    let mut harness = TestHarness::new();
+    harness.pause_language_server();
+    let response = harness.request_and_cancel::<ExecuteCommand>(ExecuteCommandParams {
+        command: "eval".into(),
+        arguments: vec![json!({ "uri": "file:///test.ncl"})],
+        ..Default::default()
+    });
+    let err = response.error.unwrap();
+    assert_eq!(err.code, ErrorCode::RequestCanceled as i32);
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::Result;
 use crossbeam::select;
@@ -139,28 +139,60 @@ impl Server {
 
     pub fn run(&mut self) -> Result<()> {
         trace!("Running...");
+        // This tracks if the last loop took a message out of the receiver for the LSP connection.
+        let mut received_msg_last_loop = false;
         loop {
             let never = crossbeam::channel::never();
             let bg = self.background_jobs.receiver().unwrap_or(&never);
 
-            if let Ok(msg) = self.connection.receiver.try_recv() {
+            // `recv_timeout` is used here to avoid a race condition that made request cancellation
+            // ineffective.
+            //
+            // The lsp server connection this receives on is a zero size bounded channel. This
+            // causes an issue where once we pull something from the channel, the lsp server thread
+            // must fetch the next message from stdin, leaving this channel empty for a short time
+            // even if there are multiple messages already sent to the server. When it's queueing
+            // tasks this loop will usually beat the thread reading from stdin and will find the
+            // channel empty. This can cause the main loop to begin handling a request even if
+            // there's already a notification in stdin cancelling it.
+            //
+            // In testing a 200 microseconds was long enough to make the tests reliable. I've
+            // increased the timeout beyond that to hopefully account for hardware
+            // differences. It should still be short enough that the additional latency is not
+            // likely to be noticed.
+            let next_msg = if received_msg_last_loop {
+                self.connection
+                    .receiver
+                    .recv_timeout(Duration::from_micros(1000))
+                    .map_err(|_| ())
+            } else {
+                // The race condition only applies the previous loop took a message out of the
+                // receiver. If that's not the case, there's no reason to wait.
+                self.connection.receiver.try_recv().map_err(|_| ())
+            };
+            if let Ok(msg) = next_msg {
+                received_msg_last_loop = true;
                 let result = self.task_queue.queue_message(msg);
                 if let Err(err) = result {
                     warn!("Failed to add a message to the queue: {}", err);
                 }
             } else if let Ok(diagnostics) = bg.try_recv() {
+                received_msg_last_loop = false;
                 self.publish_background_diagnostics(diagnostics);
             } else if let Some(task) = self.task_queue.next_task() {
+                received_msg_last_loop = false;
                 if self.handle_task(task)? == Shutdown::Shutdown {
                     break;
                 }
             } else {
                 select! {
                     recv(self.connection.receiver) -> msg => {
+                        received_msg_last_loop = true;
                         // Failure here means the connection was closed, so exit quietly.
                         let Ok(msg) = msg else {
                             break;
                         };
+
                         let result = self.task_queue.queue_message(msg);
                         if let Err(err) = result {
                             warn!("Failed to add a message to the queue: {}", err);
@@ -215,6 +247,10 @@ impl Server {
                 if let Err(err) = crate::files::run_diagnostics_on_file(self, req) {
                     warn!("Unable to publish diagnostics for a file: {}", err);
                 }
+                Ok(Shutdown::Continue)
+            }
+            Task::CancelRequest(id) => {
+                self.cancel_request(id);
                 Ok(Shutdown::Continue)
             }
         }
@@ -331,6 +367,26 @@ impl Server {
             });
         }
         Ok(())
+    }
+
+    /// Sends a response to the client acknowledging that a request has been cancelled.
+    ///
+    /// It's assumed that the cancellation was requested by the client and not initiated by the
+    /// server, and the response is sent accordingly.
+    fn cancel_request(&mut self, id: RequestId) {
+        debug!("Cancelling request {}", id);
+        self.reply(Response {
+            id,
+            result: None,
+            error: Some(ResponseError {
+                // If we need to support server cancelled requests at some point this error code is
+                // the only thing that really needs to change. `ErrorCode::ServerCanceled` would be
+                // used instead.
+                code: ErrorCode::RequestCanceled as i32,
+                message: "Request cancelled".into(),
+                data: None,
+            }),
+        });
     }
 
     pub fn issue_diagnostics(
