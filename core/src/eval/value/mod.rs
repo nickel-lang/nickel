@@ -35,6 +35,7 @@ pub use super::cache::lazy::{self, Thunk};
 pub use crate::term::record::RecordData;
 
 pub mod lens;
+pub mod stash;
 
 /// A Nickel array.
 pub type Array = Slice<NickelValue, 32>;
@@ -1573,6 +1574,37 @@ pub enum InlineValue {
     EmptyRecord = tag_inline(4),
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct InvalidInlineValueError;
+
+impl std::fmt::Display for InvalidInlineValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid inline value")
+    }
+}
+
+impl std::error::Error for InvalidInlineValueError {}
+
+impl TryFrom<u32> for InlineValue {
+    type Error = InvalidInlineValueError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        // FIXME: there must be a better way...
+        for iv in [
+            InlineValue::Null,
+            InlineValue::True,
+            InlineValue::False,
+            InlineValue::EmptyArray,
+            InlineValue::EmptyRecord,
+        ] {
+            if iv as u32 == value {
+                return Ok(iv);
+            }
+        }
+        Err(InvalidInlineValueError)
+    }
+}
+
 /// The discriminating tag for the different kinds of data that can be store in a value block.
 ///////////
 // CAUTION
@@ -1772,7 +1804,7 @@ pub trait ValueBlockData {
 pub type NumberData = Number;
 pub type StringData = NickelString;
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct ArrayData {
     pub array: Array,
     /// Arrays implement lazy contract application for performance reasons: contracts applied to
@@ -1785,7 +1817,7 @@ pub type ThunkData = RefCell<lazy::ThunkData>;
 pub type TermData = Term;
 pub type LabelData = Label;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct EnumVariantData {
     pub tag: LocIdent,
     pub arg: Option<NickelValue>,
@@ -1795,7 +1827,7 @@ pub type ForeignIdData = ForeignIdPayload;
 pub type CustomContractData = NickelValue;
 pub type SealingKeyData = SealingKey;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct TypeData {
     /// The static type.
     pub typ: Type,

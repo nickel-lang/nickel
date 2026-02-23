@@ -1,4 +1,5 @@
 //! Define the type of an identifier.
+use rkyv::string::{ArchivedString, StringResolver};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
@@ -22,6 +23,35 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(into = "&'static str", from = "String")]
 pub struct Ident(interner::Symbol);
+
+impl rkyv::Archive for Ident {
+    type Archived = ArchivedString;
+    type Resolver = StringResolver;
+
+    fn resolve(&self, resolver: StringResolver, out: rkyv::Place<Self::Archived>) {
+        // FIXME: generated?
+        ArchivedString::resolve_from_str(self.label(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for Ident
+where
+    S::Error: rkyv::rancor::Source,
+    S: rkyv::ser::Writer + rkyv::rancor::Fallible + ?Sized,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<StringResolver, S::Error> {
+        ArchivedString::serialize_from_str(self.label(), serializer)
+    }
+}
+
+impl<D> rkyv::Deserialize<Ident, D> for ArchivedString
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+{
+    fn deserialize(&self, _: &mut D) -> Result<Ident, D::Error> {
+        Ok(Ident::new(self.as_str()))
+    }
+}
 
 impl Ident {
     pub fn new(s: impl AsRef<str>) -> Self {
@@ -144,7 +174,9 @@ impl From<Ident> for &'static str {
 ///
 /// The location is ignored for equality comparison and hashing; it's mainly
 /// intended for error messages.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize,
+)]
 #[serde(into = "String", from = "String")]
 pub struct LocIdent {
     ident: Ident,
