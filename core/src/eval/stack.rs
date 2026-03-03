@@ -305,7 +305,7 @@ pub(crate) enum SealedCont {
 ///
 /// # Safety
 ///
-/// We can entirely ignore alignement constraints, because the stack is designed with the following
+/// We can entirely ignore alignment constraints, because the stack is designed with the following
 /// invariant: no reference to a stack item is ever materialized directly in the backing vector.
 /// For the Rust compiler, [Self::data] is just a stream of bytes. Whenever we need to pop, read or
 /// write data, we always first re-materialize a stack item on the native stack (that is, in a

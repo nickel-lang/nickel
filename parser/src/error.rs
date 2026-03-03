@@ -147,7 +147,7 @@ pub enum ParseError {
     RecursiveLetPattern(RawSpan),
     /// Let blocks can currently only contain plain bindings, not pattern bindings.
     PatternInLetBlock(RawSpan),
-    /// A type variable is used in ways that imply it has muiltiple different kinds.
+    /// A type variable is used in ways that imply it has multiple different kinds.
     ///
     /// This can happen in several situations, for example:
     /// - a variable is used as both a type variable and a row type variable,

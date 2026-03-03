@@ -365,7 +365,7 @@ impl<'ast> CompilePart for OrPattern<'ast> {
     // we're folding in reverse).
     //
     // We clone `match_cont` for each alternative. This looks wasteful
-    // when pretty-printing, but `NickelValue` is cheaply clonable so it's
+    // when pretty-printing, but `NickelValue` is cheaply cloneable so it's
     // probably fine. Another option would be to add an indirection through
     // a `Term::Var`.
     fn compile_part(
@@ -958,7 +958,7 @@ struct TagsOnlyMatch {
 
 impl Compile for TagsOnlyMatch {
     fn compile(self, _: &mut PosTable, value: NickelValue, pos_idx: PosIdx) -> NickelValue {
-        increment!("pattern_comile(tags_only_match)");
+        increment!("pattern_compile(tags_only_match)");
 
         // We simply use the corresponding specialized primop in that case.
         let match_op = mk_app!(

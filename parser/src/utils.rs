@@ -43,7 +43,7 @@ pub fn parse_number_base(base: u8, slice: &str) -> Result<Number, ParseNumberErr
 }
 
 /// Distinguish between the standard string opening delimiter `"`, the multi-line string
-/// opening delimter `m%"`, and the symbolic string opening delimiter `s%"`.
+/// opening delimiter `m%"`, and the symbolic string opening delimiter `s%"`.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum StringStartDelimiter<'input> {
     Standard,
@@ -362,7 +362,7 @@ pub fn mk_pos(src_id: FileId, l: usize, r: usize) -> TermPos {
     TermPos::Original(mk_span(src_id, l, r))
 }
 
-/// Checks that there are no duplicate bindings in a let block (when bindins are simple, that is
+/// Checks that there are no duplicate bindings in a let block (when bindings are simple, that is
 /// they aren't pattern), and builds the corresponding let block node if the check passes.
 pub fn mk_let<'ast>(
     alloc: &'ast AstAlloc,
@@ -401,7 +401,7 @@ pub fn mk_import_based_on_filename(
     let path = OsString::from(path);
     let format: Option<InputFormat> = InputFormat::from_path(&path);
 
-    // Fall back to InputFormat::Nickel in case of unknown filename extension for backwards compatiblilty.
+    // Fall back to InputFormat::Nickel in case of unknown filename extension for backwards compatibility.
     let format = format.unwrap_or_default();
 
     Ok(alloc.import_path(path, format))
@@ -541,7 +541,7 @@ pub fn strip_indent(chunks: &mut [StringChunk<Ast<'_>>]) {
     // "%
     // ```
     //
-    // We don't know at the time we process the expression `${x}` if it wil have to be re-indented,
+    // We don't know at the time we process the expression `${x}` if it will have to be re-indented,
     // as it depends on the rest of the line being only whitespace or not, according to the
     // indentation rule. Here, the first occurrence should not, while the second one should. We can
     // only know this once we process the next chunks, here when arriving at `${y}`. To handle
