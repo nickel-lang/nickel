@@ -565,17 +565,9 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 // structures. It maintains the invariant that any data structure only
                 // contain indices (that is, currently, variables).
                 let ts = array_data
-                    .array
-                    .iter()
-                    .cloned()
+                    .iter_with_pending_contracts(pos)
                     .map(|t| {
-                        let t_with_ctrs = RuntimeContract::apply_all(
-                            t,
-                            array_data.pending_contracts.iter().cloned(),
-                            pos,
-                        );
-
-                        NickelValue::term(Term::app(f_as_var.clone(), t_with_ctrs), pos_op_inh)
+                        NickelValue::term(Term::app(f_as_var.clone(), t), pos_op_inh)
                             .closurize(&mut self.context.cache, env.clone())
                     })
                     .collect();
@@ -745,14 +737,9 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                         if !array_data.array.is_empty() =>
                     {
                         let terms = seq_terms(
-                            array_data.array.iter().map(|t| {
-                                RuntimeContract::apply_all(
-                                    t.clone(),
-                                    array_data.pending_contracts.iter().cloned(),
-                                    pos.to_inherited(),
-                                )
-                                .closurize(&mut self.context.cache, env.clone())
-                            }),
+                            array_data
+                                .iter_with_pending_contracts(pos.to_inherited())
+                                .map(|t| t.closurize(&mut self.context.cache, env.clone())),
                             pos_op,
                         );
 
@@ -1096,25 +1083,15 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                         Ok(seq_terms(terms.into_iter(), pos_op, cont).into())
                     }
                     ValueContentRef::Array(Container::Alloc(array_data)) => {
-                        //unwrap(): the guard of the pattern exclude empty arrays
-                        let ArrayData {
-                            array,
-                            pending_contracts,
-                        } = array_data.clone();
                         let pos_inh = pos.to_inherited();
-
-                        let ts = array
-                            .into_iter()
+                        let ts = array_data
+                            .iter_with_pending_contracts(pos_inh)
                             .map(|t| {
                                 mk_term::op1(
                                     UnaryOp::Force {
                                         ignore_not_exported,
                                     },
-                                    RuntimeContract::apply_all(
-                                        t,
-                                        pending_contracts.iter().cloned(),
-                                        pos_inh,
-                                    ),
+                                    t,
                                 )
                                 .closurize(&mut self.context.cache, env.clone())
                             })
@@ -1213,17 +1190,12 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                         .fields
                         .iter()
                         .map(|(id, field)| {
-                            let field = field.clone();
-
-                            let value = field.value.map(|value| {
-                                let pos = value.pos_idx();
-                                RuntimeContract::apply_all(value, field.pending_contracts, pos)
-                            });
+                            let value = field.value_with_pending_contracts();
 
                             let field = Field {
                                 value,
                                 pending_contracts: Vec::new(),
-                                ..field
+                                metadata: field.metadata.clone(),
                             }
                             .closurize(&mut self.context.cache, env.clone());
 
@@ -2514,26 +2486,15 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     // persistent vector won't have much advantage over collecting a new array from
                     // an iterator.
                     let mut result: Array = container1
-                        .iter()
-                        .cloned()
-                        .map(|elt| {
-                            RuntimeContract::apply_all(
-                                elt,
-                                container1.iter_pending_contracts().cloned(),
-                                pos1,
-                            )
-                            .closurize(&mut self.context.cache, env1.clone())
-                        })
+                        .iter_with_pending_contracts(pos1)
+                        .map(|elt| elt.closurize(&mut self.context.cache, env1.clone()))
                         .collect();
 
-                    result.extend(container2.iter().cloned().map(|elt| {
-                        RuntimeContract::apply_all(
-                            elt,
-                            container2.iter_pending_contracts().cloned(),
-                            pos2,
-                        )
-                        .closurize(&mut self.context.cache, env2.clone())
-                    }));
+                    result.extend(
+                        container2
+                            .iter_with_pending_contracts(pos2)
+                            .map(|elt| elt.closurize(&mut self.context.cache, env2.clone())),
+                    );
 
                     Ok(NickelValue::array(result, Vec::new(), pos_op_inh).into())
                 }
@@ -4006,29 +3967,15 @@ fn eq<C: Cache>(
             // record contracts with default values, wrapped terms, etc.
 
             let mut eqs = array_data1
-                .array
-                .iter()
-                .cloned()
-                .map(|elt| {
-                    let pos = elt.pos_idx().to_inherited();
-                    RuntimeContract::apply_all(
-                        elt,
-                        array_data1.pending_contracts.iter().cloned(),
-                        pos,
-                    )
-                    .closurize(cache, env1.clone())
-                })
+                .iter_with_pending_contracts(value1.pos_idx().to_inherited())
+                .map(|elt| elt.closurize(cache, env1.clone()))
                 .collect::<Vec<_>>()
                 .into_iter()
-                .zip(array_data2.array.iter().cloned().map(|elt| {
-                    let pos = elt.pos_idx().to_inherited();
-                    RuntimeContract::apply_all(
-                        elt,
-                        array_data2.pending_contracts.iter().cloned(),
-                        pos,
-                    )
-                    .closurize(cache, env2.clone())
-                }))
+                .zip(
+                    array_data2
+                        .iter_with_pending_contracts(value2.pos_idx().to_inherited())
+                        .map(|elt| elt.closurize(cache, env2.clone())),
+                )
                 .collect::<Vec<_>>();
 
             match eqs.pop() {
@@ -4110,16 +4057,8 @@ where
         self.into_iter()
             .map(|(id, field)| {
                 let value = field
-                    .value
-                    .map(|value| {
-                        let pos = value.pos_idx();
-                        let value_with_ctrs = RuntimeContract::apply_all(
-                            value,
-                            field.pending_contracts.iter().cloned(),
-                            pos,
-                        );
-                        f(id, value_with_ctrs)
-                    })
+                    .value_with_pending_contracts()
+                    .map(|value| f(id, value))
                     .ok_or(record::MissingFieldDefErrorData {
                         id,
                         metadata: field.metadata.clone_inner(),
