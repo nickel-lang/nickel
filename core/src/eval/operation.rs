@@ -115,7 +115,7 @@ struct OpNEvalData {
     pos_op: PosIdx,
 }
 
-/// A string represention of the type of the first argument of serialization-related primitive
+/// A string representation of the type of the first argument of serialization-related primitive
 /// operations. This is a Nickel enum of the supported serialization formats.
 static ENUM_FORMAT: &str = "[| 'Json, 'Toml, 'Yaml, 'YamlDocuments |]";
 
@@ -4078,7 +4078,7 @@ fn eta_expand(op: UnaryOp, pos_op: PosIdx) -> Term {
 trait MapValuesClosurize: Sized {
     /// Returns a HashMap from `Ident` to `Field` by:
     ///
-    /// 1. Appplying the pending contracts to each fields
+    /// 1. Applying the pending contracts to each fields
     /// 2. Applying the provided function
     /// 3. Closurizing each result into the shared environment.
     ///

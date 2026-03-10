@@ -32,7 +32,7 @@ use crate::{
 /// to rationals, which can incur a loss of precision.
 ///
 /// [^number-serialization]: Conversion to string and serialization try to first convert the
-///     rational as an exact signed or usigned 64-bits integer. If this succeeds, such operations
+///     rational as an exact signed or unsigned 64-bits integer. If this succeeds, such operations
 ///     don't lose precision. Otherwise, the number is converted to the nearest 64bit float and then
 ///     serialized/printed, which can incur a loss of information.
 pub type Number = malachite::rational::Rational;
@@ -567,7 +567,7 @@ pub enum Import<'ast> {
         path: &'ast OsStr,
         format: InputFormat,
     },
-    /// Importing packges requires a `PackageMap` to translate the location
+    /// Importing packages requires a `PackageMap` to translate the location
     /// to a path. The format is always Nickel.
     Package { id: Ident },
 }

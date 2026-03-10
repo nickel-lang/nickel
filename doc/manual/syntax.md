@@ -454,7 +454,7 @@ parsed as a bare enum tag. For example, `let f = 'Ok in f 5` is not equal to
 `'Ok 5` and will actually lead to an error reporting that the enum tag `'Ok`
 isn't a function and thus can't be applied. If you need to turn a tag into a
 variant-producing function, you need to introduce a parameter such that `'Ok` is
-fully applied: `let f = fun x => 'Ok x in f 5` successfully evalutes to `'Ok 5`
+fully applied: `let f = fun x => 'Ok x in f 5` successfully evaluates to `'Ok 5`
 as expected.
 
 [^any-of-limitations]: `std.contract.any_of` has limitations for non trivial
@@ -781,7 +781,7 @@ pattern>`. The inner pattern is either:
 - a constant pattern, which is a literal value: a number, a boolean, a string,
   or `null`.
 - an enum pattern
-- a record patern
+- a record pattern
 - an array pattern
 - an or-pattern
 

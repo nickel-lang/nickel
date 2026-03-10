@@ -9,7 +9,7 @@
 //! We often need to store a closure back into a term (without relying on the environment):
 //! typically, when we combine several operands (think merging or array concatenation), each with
 //! its own environment. This is what we call closurization: wrap a closure back as a term. By
-//! extension, several structures containing term can be closurized as well, wich means to
+//! extension, several structures containing term can be closurized as well, which means to
 //! closurize all the inner terms.
 
 use crate::{

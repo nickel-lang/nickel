@@ -275,7 +275,7 @@ impl Context {
     /// case it's a record, array, or enum variant, the payload (record values, array elements, or
     /// enum payloads) will be left unevaluated.
     ///
-    /// You can evalute the resulting expression further through [Self::eval_expr_shallow].
+    /// You can evaluate the resulting expression further through [Self::eval_expr_shallow].
     pub fn eval_shallow(&mut self, src: &str) -> Result<Expr, Error> {
         self.with_vm(
             src,
