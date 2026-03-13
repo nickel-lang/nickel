@@ -425,16 +425,9 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
 
         // unwrap(): by definition, extract_field_impl(_, _, true) ensure that
         // `field.value.is_some()`
-        let value = field.value.unwrap();
-        let pos_idx = value.pos_idx();
+        let value = field.value_with_pending_contracts().unwrap();
 
-        let value_with_ctr =
-            RuntimeContract::apply_all(value, field.pending_contracts.iter().cloned(), pos_idx);
-
-        let Closure { value, env } = self.eval_closure(Closure {
-            value: value_with_ctr,
-            env,
-        })?;
+        let Closure { value, env } = self.eval_closure(Closure { value, env })?;
 
         Ok(Closure { value, env })
     }
@@ -456,7 +449,7 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
         };
 
         for id in path {
-            let Some(current_value) = field.value else {
+            let Some(current_value) = field.value_with_pending_contracts() else {
                 return self.throw_with_ctxt(EvalErrorKind::MissingFieldDef {
                     id: *prev_id,
                     metadata: field.metadata.into_inner(),
@@ -464,17 +457,12 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     pos_access: PosIdx::NONE,
                 });
             };
+            prev_pos_idx = current_value.pos_idx();
 
             // We evaluate the fields' value, either to handle the next ident of the
             // path, or to show the value if we are treating the last ident of the path
-
-            prev_pos_idx = current_value.pos_idx();
-
-            let curr_value_with_ctr =
-                RuntimeContract::apply_all(current_value, field.pending_contracts, prev_pos_idx);
-
             let current_evaled = self.eval_closure(Closure {
-                value: curr_value_with_ctr,
+                value: current_value,
                 env,
             })?;
 
@@ -564,19 +552,8 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
         // field as well in order to print a potential default value.
         let (mut field, env) = self.extract_field_closure(closure, path)?;
 
-        if let Some(value) = field.value.take() {
-            let pos_idx = value.pos_idx();
-
-            let value_with_ctr =
-                RuntimeContract::apply_all(value, field.pending_contracts.iter().cloned(), pos_idx);
-
-            field.value = Some(
-                self.eval_closure(Closure {
-                    value: value_with_ctr,
-                    env,
-                })?
-                .value,
-            );
+        if let Some(value) = field.value_with_pending_contracts() {
+            field.value = Some(self.eval_closure(Closure { value, env })?.value);
         }
 
         Ok(field)
@@ -1212,27 +1189,17 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 }
                 Ok(val) => match val.content_ref() {
                     ValueContentRef::Array(Container::Alloc(data)) => {
-                        for elt in data.array.iter() {
+                        for elt in data.iter_with_pending_contracts(pos_idx) {
                             // After eval_closure, all the array elements  are
                             // closurized already, so we don't need to do any tracking
                             // of the env.
-                            let value_with_ctr = RuntimeContract::apply_all(
-                                elt.clone(),
-                                data.pending_contracts.iter().cloned(),
-                                elt.pos_idx(),
-                            );
-                            inner(this, acc, value_with_ctr, recursion_limit.saturating_sub(1));
+                            inner(this, acc, elt, recursion_limit.saturating_sub(1));
                         }
                     }
                     ValueContentRef::Record(Container::Alloc(data)) => {
                         for (id, field) in &data.fields {
-                            if let Some(v) = &field.value {
-                                let value_with_ctr = RuntimeContract::apply_all(
-                                    v.clone(),
-                                    field.pending_contracts.iter().cloned(),
-                                    v.pos_idx(),
-                                );
-                                inner(this, acc, value_with_ctr, recursion_limit.saturating_sub(1));
+                            if let Some(v) = field.value_with_pending_contracts() {
+                                inner(this, acc, v, recursion_limit.saturating_sub(1));
                             } else {
                                 acc.push(this.err_with_ctxt(EvalErrorKind::MissingFieldDef {
                                     id: *id,

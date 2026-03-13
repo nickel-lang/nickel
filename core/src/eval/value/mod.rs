@@ -1781,6 +1781,18 @@ pub struct ArrayData {
     pub pending_contracts: Vec<RuntimeContract>,
 }
 
+impl ArrayData {
+    /// Iterates over all values in the array, with pending contracts applied.
+    pub fn iter_with_pending_contracts(
+        &self,
+        pos: PosIdx,
+    ) -> impl Iterator<Item = NickelValue> + use<'_> {
+        self.array.iter().cloned().map(move |v| {
+            RuntimeContract::apply_all(v, self.pending_contracts.iter().cloned(), pos)
+        })
+    }
+}
+
 pub type ThunkData = RefCell<lazy::ThunkData>;
 pub type TermData = Term;
 pub type LabelData = Label;
@@ -2350,6 +2362,13 @@ impl Container<&ArrayData> {
         self.into_opt()
             .into_iter()
             .flat_map(|array_data| array_data.array.iter())
+    }
+
+    /// Iterates over the elements of the array, with pending contracts applied.
+    pub fn iter_with_pending_contracts(&self, pos: PosIdx) -> impl Iterator<Item = NickelValue> {
+        self.into_opt()
+            .into_iter()
+            .flat_map(move |array_data| array_data.iter_with_pending_contracts(pos))
     }
 
     /// Iterates over the pending contracts.

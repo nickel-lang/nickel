@@ -358,6 +358,17 @@ impl Field {
             RecordExtKind::WithoutValue
         }
     }
+
+    /// Retrieves the field's value, applying any pending contracts.
+    pub fn value_with_pending_contracts(&self) -> Option<NickelValue> {
+        self.value.as_ref().map(|value| {
+            RuntimeContract::apply_all(
+                value.clone(),
+                self.pending_contracts.iter().cloned(),
+                value.pos_idx(),
+            )
+        })
+    }
 }
 
 impl Traverse<NickelValue> for Field {
