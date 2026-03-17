@@ -461,7 +461,7 @@ pub enum TypecheckErrorKind<'ast> {
     /// }`.
     RecordRowConflict {
         /// The row that couldn't be added to the record type, because it already existed with a
-        /// different type assignement.
+        /// different type assignment.
         row: RecordRow<'ast>,
         expected: Type<'ast>,
         inferred: Type<'ast>,
@@ -470,7 +470,7 @@ pub enum TypecheckErrorKind<'ast> {
     /// Same as [Self::RecordRowConflict] but for enum types.
     EnumRowConflict {
         /// The row that couldn't be added to the record type, because it already existed with a
-        /// different type assignement.
+        /// different type assignment.
         row: EnumRow<'ast>,
         expected: Type<'ast>,
         inferred: Type<'ast>,
@@ -565,7 +565,7 @@ pub enum TypecheckErrorKind<'ast> {
         /// The position of the whole or-pattern.
         pos: TermPos,
     },
-    /// An error occured during the resolution of an import.
+    /// An error occurred during the resolution of an import.
     ///
     /// Since RFC007, imports aren't pre-processed anymore, and import resolution can happen
     /// interleaved with typechecking. In particular, in order to typecheck expressions of the form
@@ -806,7 +806,7 @@ pub trait IntoDiagnostics {
     ///
     /// - `pos_table`: the position table, mapping position indices stored in Nickel values to
     /// - `files`: this is a mutable reference to allow insertion of temporary snippets. Note that
-    ///   `Files` is cheaply clonable and copy-on-write, so you can easily get a mutable `Files` from
+    ///   `Files` is cheaply cloneable and copy-on-write, so you can easily get a mutable `Files` from
     ///   a non-mutable one, but bear in mind that the returned diagnostics may contains file ids that
     ///   refer to your mutated files.
     ///
@@ -1959,7 +1959,7 @@ impl IntoDiagnostics for ParseError {
                     "A special string must be opened and closed with the same number of `%` \
                     in the corresponding delimiters."
                         .into(),
-                    "Try removing the superflous `%` in the closing delimiter".into(),
+                    "Try removing the superfluous `%` in the closing delimiter".into(),
                 ]),
             ParseError::ExternalFormatError(format, msg, span_opt) => {
                 let labels = span_opt
@@ -2511,7 +2511,7 @@ impl<'ast> IntoDiagnostics for &'_ TypecheckErrorKind<'ast> {
                             format!("Found an expression with the row `{row}`"),
                             format!(
                                 "But this row appears inside another record type, \
-                                which already has a diffent declaration for the field `{}`",
+                                which already has a different declaration for the field `{}`",
                                 row.id
                             ),
                             String::from(
@@ -2547,7 +2547,7 @@ impl<'ast> IntoDiagnostics for &'_ TypecheckErrorKind<'ast> {
                             format!("Found an expression with the row `{row}`"),
                             format!(
                                 "But this row appears inside another enum type, \
-                                which already has a diffent declaration for the tag `{}`",
+                                which already has a different declaration for the tag `{}`",
                                 row.id
                             ),
                             String::from(

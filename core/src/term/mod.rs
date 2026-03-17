@@ -240,7 +240,7 @@ pub enum Term {
     /// This program is valid, but when evaluating `r` in `r.baz`, `bar` doesn't have a definition
     /// yet. This is fine because we don't evaluate `bar` nor `foo`. Still, we have to put
     /// something in the recursive environment. And if we wrote `r.foo` instead, we should raise a
-    /// missing field definition error. Thus, we need to bind `bar` to a term wich, if ever
+    /// missing field definition error. Thus, we need to bind `bar` to a term which, if ever
     /// evaluated, will raise a proper missing field definition error. This is precisely the
     /// behavior of `RuntimeError`.
     RuntimeError(Box<EvalErrorKind>),
@@ -253,7 +253,7 @@ pub enum Import {
         path: OsString,
         format: InputFormat,
     },
-    /// Importing packges requires a [`crate::package::PackageMap`] to translate the location
+    /// Importing packages requires a [`crate::package::PackageMap`] to translate the location
     /// to a path. The format is always Nickel.
     Package {
         id: Ident,
@@ -1129,7 +1129,7 @@ pub enum UnaryOp {
 
     /// Freezes a recursive record to make it a static dictionary. Apply all pending lazy contracts
     /// (and flush them), and remove all dependency information, so that the value of the fields is
-    /// fixed in time and subsequent overrides will only impact the overriden field.
+    /// fixed in time and subsequent overrides will only impact the overridden field.
     RecordFreeze,
 
     /// Print a message when encountered during evaluation and proceed with the evaluation of the
@@ -1138,7 +1138,7 @@ pub enum UnaryOp {
 
     /// Push a new, fresh diagnostic on the diagnostic stack of a contract label. This has the
     /// effect of saving the current diagnostic, as following calls to primop that modifies the
-    /// label's current diagnostic will modify the fresh one, istead of the one being stacked.
+    /// label's current diagnostic will modify the fresh one, instead of the one being stacked.
     /// This primop shouldn't be used directly by user a priori, but is used internally during e.g.
     /// contract application.
     LabelPushDiag,
@@ -1148,7 +1148,7 @@ pub enum UnaryOp {
     #[cfg(feature = "nix-experimental")]
     EvalNix,
 
-    /// Retrive the argument from an enum variant: `%enum/get_arg% ('Foo t) := t`
+    /// Retrieve the argument from an enum variant: `%enum/get_arg% ('Foo t) := t`
     EnumGetArg,
     /// Create an enum variant from a tag and an argument. This operator is strict in tag and
     /// return a function that can be further applied to an argument.

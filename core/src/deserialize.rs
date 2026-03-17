@@ -469,7 +469,7 @@ impl<'de> serde::Deserializer<'de> for NickelValue {
         }
     }
 
-    /// Deserialize an indentifier as a string.
+    /// Deserialize an identifier as a string.
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,

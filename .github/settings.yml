@@ -21,7 +21,7 @@ labels:
     description: "major: an upcoming release"
   - name: "P3"
     color: fbca04
-    description: "minor: not priorized"
+    description: "minor: not prioritized"
   - name: "P4"
     color: fef2c0
     description: "unimportant: consider wontfix or other priority"

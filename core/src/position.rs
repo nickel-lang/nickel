@@ -74,7 +74,7 @@ pub struct PosTable {
 impl PosTable {
     pub fn new() -> Self {
         // We always populate the first entry with `TermPos::None`, so that we can safely use the
-        // index `0` (`PosIdx::NONE`) to mean unintialized position, without having to special case
+        // index `0` (`PosIdx::NONE`) to mean uninitialized position, without having to special case
         // the undefined position.
         Self { positions: vec![] }
     }

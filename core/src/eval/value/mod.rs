@@ -1193,7 +1193,7 @@ impl NickelValue {
     }
 
     /// Determines if a value is in evaluated form, called weak head normal form (WHNF). See
-    /// [crate::term::Term::is_whnf] for more detais.
+    /// [crate::term::Term::is_whnf] for more details.
     #[inline]
     pub fn is_whnf(&self) -> bool {
         !matches!(self.data_tag(), Some(DataTag::Thunk | DataTag::Term))
@@ -1739,7 +1739,7 @@ impl ValueBlockHeader {
         }
 
         if count > Self::MAX_REF_COUNT {
-            panic!("reference count overfow");
+            panic!("reference count overflow");
         }
     }
 

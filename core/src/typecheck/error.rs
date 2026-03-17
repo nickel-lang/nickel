@@ -185,7 +185,7 @@ pub enum UnifErrorKind<'ast> {
         id: LocIdent,
         expected: UnifType<'ast>,
         inferred: UnifType<'ast>,
-        /// The uderlying unification error (`expected` and `inferred` should be the record types
+        /// The underlying unification error (`expected` and `inferred` should be the record types
         /// that failed to unify, while this error is the specific cause of the mismatch for the
         /// `id` row)
         cause: UnifError<'ast>,
