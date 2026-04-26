@@ -1,7 +1,7 @@
 //! Thunks and associated devices used to implement lazy evaluation.
 use super::{BlackholedError, Cache, CacheIndex, Closure};
 use crate::{
-    eval::value::{self, EnumVariantData, NickelValue, ValueContentRef},
+    eval::value::{self, Container, EnumVariantData, NickelValue, ValueContentRef},
     identifier::Ident,
     metrics::increment,
     position::PosIdx,
@@ -49,7 +49,7 @@ pub enum ThunkHash {
     /// as well.
     Undefined,
     /// The hash of this thunk hasn't been computed yet. Note that an [Self::Unknwon] hash might
-    /// turn to [Self::Undefined] after hashing: it doesn't have to be [Self::Known].
+    /// turn to [Self::Undefined] after hashing: it doesn't have to end up as [Self::Known].
     Unknown,
     Known(ContentHash),
 }
@@ -59,6 +59,7 @@ pub enum ThunkHash {
 pub struct ThunkData {
     inner: InnerThunkData,
     /// The hash of the expression represented by this thunk. Used for incremental evaluation.
+    /// Computed from [Self::cui] and the  hashes of the this thunk's dependencies.
     hash: ThunkHash,
     /// The Cross-evaluation Uniform Identifier. This is a semantic hash of the original expression
     /// of the closure (and thus doesn't account for dependencies), set by the incremental
@@ -185,6 +186,8 @@ impl ThunkData {
         } else {
             // If we don't have a cross-evaluation unique identifier, we still try to structurally
             // hash simple constants, that don't involve other expressions.
+            closure.value.tag().hash(&mut hasher);
+
             match closure.value.content_ref() {
                 ValueContentRef::Null => 0.hash(&mut hasher),
                 ValueContentRef::Bool(b) => b.hash(&mut hasher),
@@ -193,6 +196,8 @@ impl ThunkData {
                 ValueContentRef::EnumVariant(EnumVariantData { tag, arg: None }) => {
                     tag.hash(&mut hasher)
                 }
+                ValueContentRef::Array(Container::Empty)
+                | ValueContentRef::Record(Container::Empty) => 0.hash(&mut hasher),
                 _ => return None,
             }
         }
@@ -507,10 +512,17 @@ impl Thunk {
         }
     }
 
-    /// Attach a Cross-evaluation Unique Identifier to this thunk.
+    /// Set the Cross-evaluation Unique Identifier to this thunk.
     #[inline]
     pub fn set_cui(&self, cui: ContentHash) {
         self.data().borrow_mut().cui = Some(cui);
+    }
+
+    /// Attach a Cross-evaluation Unique Identifier to this thunk.
+    #[inline]
+    pub fn with_cui(self, cui: ContentHash) -> Self {
+        self.set_cui(cui);
+        self
     }
 
     /// Returns the content hash of this thunk. If the hash has been computed before (and stored in
@@ -524,7 +536,7 @@ impl Thunk {
     /// Returns `None` if any of the transitive dependencies of this thunk has a hash with value
     /// [ThunkHash::Undefined].
     #[inline]
-    fn content_hash(&self) -> Option<ContentHash> {
+    pub fn content_hash(&self) -> Option<ContentHash> {
         self.data().borrow_mut().content_hash()
     }
 
@@ -539,6 +551,11 @@ impl Thunk {
     #[inline]
     pub fn state(&self) -> ThunkState {
         self.data().borrow().state
+    }
+
+    #[inline]
+    pub fn cui(&self) -> Option<ContentHash> {
+        self.data().borrow().cui
     }
 
     /// Set the state to evaluated.

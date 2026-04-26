@@ -19,7 +19,7 @@ pub type CacheIndex = lazy::Thunk;
 // pub type CacheIndex = usize;
 
 /// The current Cache implementation
-pub type CacheImpl = lazy::CBNCache;
+pub type CacheImpl = incremental_ng::IncrementalCache;
 // pub type CacheImpl = incremental::IncCache;
 
 /// A black-holed node was accessed, which would lead to infinite recursion.

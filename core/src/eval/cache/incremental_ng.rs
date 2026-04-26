@@ -2,7 +2,7 @@
 
 use super::{
     Cache,
-    lazy::{CBNCache, ContentHash, Thunk},
+    lazy::{CBNCache, ContentHash, Thunk, ThunkState},
 };
 use std::{collections::HashMap, io};
 
@@ -24,6 +24,18 @@ pub enum CacheEntry {
     Loaded(Thunk),
     /// The entry is a new thunk coming from the current evaluation round.
     Recorded(Thunk),
+}
+
+impl CacheEntry {
+    pub fn get(&mut self) -> &Thunk {
+        match self {
+            CacheEntry::Loadable(loadable_thunk) => {
+                *self = CacheEntry::Loaded(loadable_thunk.load());
+                self.get()
+            }
+            CacheEntry::Loaded(thunk) | CacheEntry::Recorded(thunk) => thunk,
+        }
+    }
 }
 
 //TODO[design]:
@@ -93,6 +105,16 @@ impl Cache for IncrementalCache {
         &mut self,
         idx: &mut super::CacheIndex,
     ) -> Result<Option<Self::UpdateIndex>, super::BlackholedError> {
+        // Incremental caching: if the thunk has a computable hash, and we find it in the table, we
+        // use that value as well
+        if let ThunkState::Suspended = idx.state()
+            && idx.cui().is_some()
+            && let Some(content_hash) = idx.content_hash()
+            && let Some(cached) = self.thunks.get_mut(&content_hash)
+        {
+            idx.clone().update(cached.get().get_owned())
+        }
+
         self.cbn_cache.get_update_index(idx)
     }
 
