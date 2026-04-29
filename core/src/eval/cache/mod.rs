@@ -10,17 +10,18 @@ use crate::{
     term::{BindingType, record::FieldDeps},
 };
 
-pub mod lazy;
-// pub mod incremental;
+#[cfg(feature = "incremental-experimental")]
 pub mod incremental_ng;
+pub mod lazy;
 
 /// An index to a specific item stored in the cache
 pub type CacheIndex = lazy::Thunk;
-// pub type CacheIndex = usize;
 
 /// The current Cache implementation
+#[cfg(not(feature = "incremental-experimental"))]
+pub type CacheImpl = lazy::CBNCache;
+#[cfg(feature = "incremental-experimental")]
 pub type CacheImpl = incremental_ng::IncrementalCache;
-// pub type CacheImpl = incremental::IncCache;
 
 /// A black-holed node was accessed, which would lead to infinite recursion.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
