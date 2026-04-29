@@ -44,7 +44,7 @@ pub struct ThunkData {
     /// of the closure (and thus doesn't account for dependencies), set by the incremental
     /// evaluator for thunks of interest.
     #[cfg(feature = "incremental-experimental")]
-    cui: Option<ContentHash>,
+    cui: Option<crate::eval::cui::ContentHash>,
     state: ThunkState,
     /// A flag indicating whether the thunk is locked. See [Thunk::lock].
     locked: bool,
@@ -691,12 +691,11 @@ impl ThunkUpdateFrame {
 #[cfg(feature = "incremental-experimental")]
 mod incremental {
     use super::*;
-    use crate::eval::value::{Container, EnumVariantData, ValueContentRef};
+    use crate::eval::{
+        cui::ContentHash,
+        value::{Container, EnumVariantData, ValueContentRef},
+    };
     use std::hash::{DefaultHasher, Hash, Hasher};
-
-    /// A semantic hash for re-using previous computations in the incremental evaluation mode.
-    #[derive(Copy, Debug, PartialEq, Eq, Clone, Hash)]
-    pub struct ContentHash(u64);
 
     #[derive(Copy, Debug, PartialEq, Eq, Clone)]
     pub enum ThunkHash {

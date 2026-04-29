@@ -110,6 +110,8 @@ pub mod merge;
 pub mod operation;
 pub mod stack;
 pub mod value;
+#[cfg(feature = "incremental-experimental")]
+pub mod cui;
 
 use callstack::*;
 use stack::{
