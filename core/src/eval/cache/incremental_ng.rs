@@ -4,14 +4,18 @@ use super::{
     Cache,
     lazy::{CBNCache, ContentHash, Thunk, ThunkState},
 };
-use std::{collections::HashMap, io};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    io,
+};
 
+/// A thunk coming from a preivous evaluation. Can be lazily loaded as a normal thunk if needed.
 #[derive(Clone)]
-pub struct LoadableThunk {}
+pub struct LoadableThunk(Thunk);
 
 impl LoadableThunk {
     pub fn load(&self) -> Thunk {
-        todo!()
+        self.0.clone()
     }
 }
 
@@ -51,12 +55,12 @@ impl CacheEntry {
 //
 // # After meditation
 //
-// I think there's an even better way: makes hashing/cache fetching, and only try to fetch from the
-// incremental cache when we first evaluate a (hashable) thunk. Doing so, any unused thunk will be
-// left alone. We can compute hashes in a lazy way. This means we allocate a thunk unconditionally
-// at first (even if it ends up being pulled from the incremental cache), but it's not a huge cost
-// and is likely to be similar to the cost of pulling an existing loadable thunk from the
-// incremental cache anyway, as we need to put the thunk data somewhere.
+// I think there's an even better way: makes hashing/cache fetching lazy, and only try to fetch
+// from the incremental cache when we first evaluate a (hashable) thunk. Doing so, any unused thunk
+// will be left alone. We can compute hashes in a lazy way. This means we allocate a thunk
+// unconditionally at first (even if it ends up being pulled from the incremental cache), but it's
+// not a huge cost and is likely to be similar to the cost of pulling an existing loadable thunk
+// from the incremental cache anyway, as we need to put the thunk data somewhere.
 #[derive(Default, Clone)]
 pub struct IncrementalCache {
     cbn_cache: CBNCache,
@@ -88,9 +92,7 @@ impl IncrementalCache {
         bty: crate::term::BindingType,
         cui: ContentHash,
     ) -> <Self as Cache>::UpdateIndex {
-        let idx = self.cbn_cache.add(clos, bty);
-        idx.set_cui(cui);
-        idx
+        self.cbn_cache.add(clos, bty).with_cui(cui)
     }
 }
 
@@ -139,6 +141,15 @@ impl Cache for IncrementalCache {
     }
 
     fn update(&mut self, clos: crate::eval::Closure, idx: Self::UpdateIndex) {
+        // If we update a thunk of interest, now that we have a value for it, we can try to compute its
+        // hash and record it for future evaluations.
+        if idx.cui().is_some()
+            && let Some(content_hash) = idx.content_hash()
+            && let Entry::Vacant(entry) = self.thunks.entry(content_hash)
+        {
+            entry.insert_entry(CacheEntry::Recorded(idx.clone()));
+        }
+
         self.cbn_cache.update(clos, idx)
     }
 
