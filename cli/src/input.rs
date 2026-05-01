@@ -23,8 +23,8 @@ pub struct InputOptions<Customize: clap::Args, InputFormatOptions: clap::Args> {
     #[arg(long)]
     apply_contract: Vec<PathBuf>,
 
-    #[cfg(debug_assertions)]
     /// Skips the standard library import. For debugging only
+    #[cfg(debug_assertions)]
     #[arg(long, global = true)]
     pub nostdlib: bool,
 
@@ -52,12 +52,16 @@ pub struct InputOptions<Customize: clap::Args, InputFormatOptions: clap::Args> {
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
 
-    #[arg(long, global = true)]
     /// Filesystem location for caching fetched packages.
     ///
     /// Defaults to an appropriate platform-dependent value, like
     /// `$XDG_CACHE_HOME/nickel` on linux.
+    #[arg(long, global = true)]
     pub package_cache_dir: Option<PathBuf>,
+
+    /// Enable incremental evaluation (experimental)
+    #[arg(long, global = true)]
+    pub incremental: bool,
 }
 
 pub enum PrepareError {
