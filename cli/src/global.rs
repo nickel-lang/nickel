@@ -6,7 +6,7 @@ use std::{
 };
 
 use nickel_lang_core::{
-    error::Error as CoreError, error::Reporter, eval::cache::lazy::CBNCache, files::Files,
+    error::Error as CoreError, error::Reporter, eval::cache::CacheImpl, files::Files,
     program::Program,
 };
 
@@ -67,7 +67,7 @@ impl GlobalContext {
     pub fn with_program<
         T,
         P: Prepare,
-        F: FnOnce(&mut Program<CBNCache>) -> Result<T, CoreError>,
+        F: FnOnce(&mut Program<CacheImpl>) -> Result<T, CoreError>,
     >(
         &mut self,
         preparer: &P,

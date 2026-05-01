@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use nickel_lang_core::{
     ast::InputFormat,
-    eval::cache::lazy::CBNCache,
+    eval::cache::CacheImpl,
     files::Files,
     program::{Program, ProgramBuilder},
 };
@@ -81,11 +81,11 @@ impl<E: Into<crate::error::Error>> From<E> for PrepareError {
 pub type PrepareResult<T> = Result<T, PrepareError>;
 
 pub trait Prepare {
-    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CBNCache>>;
+    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CacheImpl>>;
 }
 
 impl<C: clap::Args + Customize, F: clap::Args + InputFormatOptions> Prepare for InputOptions<C, F> {
-    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CBNCache>> {
+    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CacheImpl>> {
         // Resolve the package map first — it's independent of program construction and may itself
         // fail (manifest open / lock / package fetch).
         #[cfg(feature = "package-experimental")]
