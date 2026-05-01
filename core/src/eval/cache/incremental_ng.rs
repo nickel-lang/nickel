@@ -2,8 +2,10 @@
 
 use super::{
     Cache,
-    lazy::{CBNCache, ContentHash, Thunk, ThunkState},
+    lazy::{CBNCache, Thunk, ThunkState},
 };
+
+use crate::eval::cui::ContentHash;
 use std::{
     collections::{HashMap, hash_map::Entry},
     io,
