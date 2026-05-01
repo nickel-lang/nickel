@@ -105,13 +105,13 @@ use std::{
 pub mod cache;
 pub mod callstack;
 pub mod contract_eq;
+#[cfg(feature = "incremental-experimental")]
+pub mod cui;
 pub mod fixpoint;
 pub mod merge;
 pub mod operation;
 pub mod stack;
 pub mod value;
-#[cfg(feature = "incremental-experimental")]
-pub mod cui;
 
 use callstack::*;
 use stack::{
@@ -128,7 +128,8 @@ impl AsRef<Vec<StackElem>> for CallStack {
 }
 
 /// The context of the Nickel virtual machine. The context stores external state that might need to
-/// outlive one VM instance. The virtual machine typically borrows the context mutably.
+/// outlive one VM instance and configuration. The virtual machine typically borrows the context
+/// mutably.
 pub struct VmContext<R: ImportResolver, C: Cache> {
     /// The interface used to resolve and fetch imports.
     pub import_resolver: R,
@@ -142,6 +143,11 @@ pub struct VmContext<R: ImportResolver, C: Cache> {
     pub cache: C,
     /// The position table, mapping position indices to spans.
     pub pos_table: PosTable,
+    /// Wether incremental evaluation is enabled or not. Incremental evaluation is currently
+    /// feature-gated, but even when compiled by the feature, it needs to be explicitly enabled
+    /// through this feature.
+    #[cfg(feature = "incremental-experimental")]
+    pub enable_incremental_evaluation: bool,
 }
 
 impl<R: ImportResolver, C: Cache> VmContext<R, C> {
@@ -169,7 +175,16 @@ impl<R: ImportResolver, C: Cache> VmContext<R, C> {
             reporter: Box::new(reporter),
             cache: C::new(),
             pos_table,
+            #[cfg(feature = "incremental-experimental")]
+            enable_incremental_evaluation: false,
         }
+    }
+
+    /// Enable incremental evaluation for this VM.
+    #[cfg(feature = "incremental-experimental")]
+    pub fn with_incremental_evaluation(mut self) -> Self {
+        self.enable_incremental_evaluation = true;
+        self
     }
 }
 
@@ -1223,6 +1238,20 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
         let mut ret = Vec::new();
         inner(self, &mut ret, value, recursion_limit);
         ret
+    }
+
+    /// In the contenxt of incremental evaluation, decides if a given thunk should be allocated as
+    /// thunk of interest given its content. A thunk of interest is a thunk which should be hashed
+    /// and persisted in the incremental cache to be re-used in the next evaluation.
+    ///
+    /// Persisting a thunk has a cost. Ideally we'd like to strike a balance between this cost and
+    /// the expected return. Typically, thunk of interest should be rather costly to compute
+    /// (otherwise, it might be cheaper to recompute them again) and have good chances surviving
+    /// successing changes (e.g focusing on top-level configurations fields rather than local
+    /// variales).
+    #[cfg(feature = "incremental-experimental")]
+    fn is_of_interest(_value: &NickelValue) -> bool {
+        todo!()
     }
 }
 

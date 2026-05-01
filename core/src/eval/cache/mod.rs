@@ -86,4 +86,15 @@ pub trait Cache: Clone {
         &mut self,
         idx: &mut CacheIndex,
     ) -> Result<Self::UpdateIndex, BlackholedError>;
+
+    /// Attach a [CUI][crate::eval::cui] to the given index, thereby marking it as being of
+    /// interest for incremental evaluation.
+    ///
+    /// The default implementation does nothing, which is the behavior for caches that don't
+    /// support incremental evaluation, such as the default CBN cache. In practice we never expect
+    /// to actually call [Self::attach_cui] on such caches: a VM with incremental evaluation
+    /// enabled should always use a cache that supports incremental evaluation in practice, but we
+    /// still need to have this method in the general cache interface.
+    #[cfg(feature = "incremental-experimental")]
+    fn attach_cui(&mut self, _idx: &mut CacheIndex, _cui: crate::eval::cui::ContentHash) {}
 }

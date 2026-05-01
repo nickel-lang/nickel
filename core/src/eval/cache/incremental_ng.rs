@@ -73,28 +73,13 @@ impl IncrementalCache {
     /// Serialize the cache to a persistent storage (typically a file), to be re-used in a
     /// subsequent evaluation. Only loaded and recorded [CacheEntry]s will be saved; loadable ones
     /// (recorded from the previous evaluation but not used in the current one) are dropped.
-    pub fn persist(self, out: impl io::Write) -> io::Result<()> {
+    pub fn persist(self, _out: impl io::Write) -> io::Result<()> {
         todo!()
     }
 
     /// Loads a persisted cache.
-    pub fn load(src: impl io::Read) -> io::Result<Self> {
+    pub fn load(_src: impl io::Read) -> io::Result<Self> {
         todo!()
-    }
-
-    /// Allocates a thunk for the given closure. This replaces [Cache::add] for thunks of interest
-    /// in the incremental cache.
-    ///
-    /// The hash is left unknown, and is computed for thunks of interest when they're first
-    /// evaluated.
-    #[inline]
-    pub fn add_cached(
-        &mut self,
-        clos: crate::eval::Closure,
-        bty: crate::term::BindingType,
-        cui: ContentHash,
-    ) -> <Self as Cache>::UpdateIndex {
-        self.cbn_cache.add(clos, bty).with_cui(cui)
     }
 }
 
@@ -129,6 +114,7 @@ impl Cache for IncrementalCache {
     ) -> super::CacheIndex {
         self.cbn_cache.add(clos, bty)
     }
+
 
     fn patch<F: Fn(&mut crate::eval::Closure)>(&mut self, idx: super::CacheIndex, f: F) {
         self.cbn_cache.patch(idx, f)
@@ -192,5 +178,9 @@ impl Cache for IncrementalCache {
         idx: &mut super::CacheIndex,
     ) -> Result<Self::UpdateIndex, super::BlackholedError> {
         self.cbn_cache.make_update_index(idx)
+    }
+
+    fn attach_cui(&mut self, idx: &mut super::CacheIndex, cui: ContentHash) {
+        idx.set_cui(cui);
     }
 }
