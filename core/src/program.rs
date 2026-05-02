@@ -1197,6 +1197,13 @@ impl<R, W> ProgramBuilder<R, W> {
             reporter,
         }
     }
+
+    /// Enable incremental evaluation (experimental). Disabled by default.
+    #[cfg(feature = "incremental-experimental")]
+    pub fn with_incremental_evaluation(mut self) -> Self {
+        self.enable_incremental_evaluation = true; 
+        self
+    }
 }
 
 impl<R, W> ProgramBuilder<R, W>

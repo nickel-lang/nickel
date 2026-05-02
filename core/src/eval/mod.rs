@@ -777,6 +777,11 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                             indices.push(idx.clone());
                         }
 
+                        #[cfg(feature = "incremental-experimental")]
+                        if self.context.enable_incremental_evaluation {
+                            idx.register(&mut self.context.cache);
+                        }
+
                         env.insert(x.ident(), idx);
                     }
 

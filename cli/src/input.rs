@@ -154,6 +154,11 @@ impl<C: clap::Args + Customize, F: clap::Args + InputFormatOptions> Prepare for 
             builder = builder.with_package_map(map);
         }
 
+        #[cfg(feature = "incremental-experimental")]
+        if self.incremental {
+            builder = builder.with_incremental_evaluation();
+        }
+
         // The builder defers all I/O to `build()`, so any failure here is from opening an input
         // file, registering an in-memory source, or loading a contract path. All such errors are
         // `IOError`, whose rendering doesn't need the source database — `Files::empty()` is
