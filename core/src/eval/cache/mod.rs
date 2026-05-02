@@ -96,5 +96,5 @@ pub trait Cache: Clone {
     /// enabled should always use a cache that supports incremental evaluation in practice, but we
     /// still need to have this method in the general cache interface.
     #[cfg(feature = "incremental-experimental")]
-    fn attach_cui(&mut self, _idx: &mut CacheIndex, _cui: crate::eval::cui::ContentHash) {}
+    fn attach_cui(&mut self, _idx: &CacheIndex, _cui: crate::eval::semantic_hash::SemanticHash) {}
 }

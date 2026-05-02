@@ -105,15 +105,17 @@ use std::{
 pub mod cache;
 pub mod callstack;
 pub mod contract_eq;
-#[cfg(feature = "incremental-experimental")]
-pub mod cui;
 pub mod fixpoint;
 pub mod merge;
 pub mod operation;
+#[cfg(feature = "incremental-experimental")]
+pub mod semantic_hash;
 pub mod stack;
 pub mod value;
 
 use callstack::*;
+#[cfg(feature = "incremental-experimental")]
+use semantic_hash::Register as _;
 use stack::{
     Op1ContItem, Op2FirstContItem, OpNContItem, PrimopAppInfo, SealedCont, Stack, StrAccItem,
 };
@@ -911,13 +913,24 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                                 })
                                 .collect();
 
+                            #[cfg(feature = "incremental-experimental")]
+                            if self.context.enable_incremental_evaluation {
+                                array_data.register(&mut self.context.cache);
+                            }
+
                             NickelValue::array(array, pending_contracts, pos_idx)
                         }
-                        ValueContentRef::Record(Container::Alloc(data)) => NickelValue::record(
+                        ValueContentRef::Record(Container::Alloc(data)) => {
                             // unwrap(): we treated the empty record case already
-                            data.clone().closurize(&mut self.context.cache, env),
-                            pos_idx,
-                        ),
+                            let record_data = data.clone().closurize(&mut self.context.cache, env);
+
+                            #[cfg(feature = "incremental-experimental")]
+                            if self.context.enable_incremental_evaluation {
+                                record_data.register(&mut self.context.cache);
+                            }
+
+                            NickelValue::record(record_data, pos_idx)
+                        }
                         ValueContentRef::EnumVariant(data) => {
                             let EnumVariantData { tag, arg } = data.clone();
                             let arg = arg.map(|arg| arg.closurize(&mut self.context.cache, env));
@@ -1002,6 +1015,11 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                         fixpoint::patch_field(&mut self.context.cache, rt, &rec_env);
                     }
 
+                    #[cfg(feature = "incremental-experimental")]
+                    if self.context.enable_incremental_evaluation {
+                        static_part.register(&mut self.context.cache);
+                    }
+
                     // Transform the static part `{stat1 = val1, ..., statn = valn}` and the
                     // dynamic part `{exp1 = dyn_val1, ..., expm = dyn_valm}` to a sequence of
                     // extensions
@@ -1063,6 +1081,11 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     increment!(format!("import:{id:?}"));
 
                     if let Some(val) = self.context.import_resolver.get(*id) {
+                        #[cfg(feature = "incremental-experimental")]
+                        if self.context.enable_incremental_evaluation {
+                            val.register(&mut self.context.cache);
+                        }
+
                         val.into()
                     } else {
                         break Err(Box::new(EvalErrorKind::InternalError(
@@ -1238,20 +1261,6 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
         let mut ret = Vec::new();
         inner(self, &mut ret, value, recursion_limit);
         ret
-    }
-
-    /// In the contenxt of incremental evaluation, decides if a given thunk should be allocated as
-    /// thunk of interest given its content. A thunk of interest is a thunk which should be hashed
-    /// and persisted in the incremental cache to be re-used in the next evaluation.
-    ///
-    /// Persisting a thunk has a cost. Ideally we'd like to strike a balance between this cost and
-    /// the expected return. Typically, thunk of interest should be rather costly to compute
-    /// (otherwise, it might be cheaper to recompute them again) and have good chances surviving
-    /// successing changes (e.g focusing on top-level configurations fields rather than local
-    /// variales).
-    #[cfg(feature = "incremental-experimental")]
-    fn is_of_interest(_value: &NickelValue) -> bool {
-        todo!()
     }
 }
 

@@ -5,7 +5,7 @@ use super::{
     lazy::{CBNCache, Thunk, ThunkState},
 };
 
-use crate::eval::cui::ContentHash;
+use crate::eval::semantic_hash::SemanticHash;
 use std::{
     collections::{HashMap, hash_map::Entry},
     io,
@@ -44,12 +44,11 @@ impl CacheEntry {
     }
 }
 
-//TODO[design]:
 // Not clear yet if all hashable thunks should always be fetched from cache, or if we need a
-// distinction between dependents (intermediate thunks) whose hash is needed but that we don't
+// distinction between dependencies (intermediate thunks) whose hash is needed but that we don't
 // necessarily want to put in the cache, and thunks of interest. Note that at the time of
 // serialization, we'll need _some_ dependencies, but they might have changed (or be gone
-// completly). If there is no distinction, then we don't need the whole on-demand computation for
+// completely). If there is no distinction, then we don't need the whole on-demand computation for
 // hashes: we need to pre-compute the hash anyway to see if the thunk is in the cache, so we can
 // very much fill it right away at thunk creation. Concretely, the question is: should we have only
 // one `add_cached` additional method, or a `add_hashed` and `add_or_get_from_cache`? Let's
@@ -58,15 +57,15 @@ impl CacheEntry {
 // # After meditation
 //
 // I think there's an even better way: makes hashing/cache fetching lazy, and only try to fetch
-// from the incremental cache when we first evaluate a (hashable) thunk. Doing so, any unused thunk
-// will be left alone. We can compute hashes in a lazy way. This means we allocate a thunk
-// unconditionally at first (even if it ends up being pulled from the incremental cache), but it's
-// not a huge cost and is likely to be similar to the cost of pulling an existing loadable thunk
-// from the incremental cache anyway, as we need to put the thunk data somewhere.
+// from the incremental cache when we first evaluate a (hashable/of interest) thunk. Doing so, any
+// unused thunk will be left alone. We can compute hashes in a lazy way. This means we allocate a
+// thunk unconditionally at first (even if it ends up being pulled from the incremental cache), but
+// it's not a huge cost and is likely to be similar to the cost of pulling an existing loadable
+// thunk from the incremental cache anyway, as we need to put the thunk data somewhere.
 #[derive(Default, Clone)]
 pub struct IncrementalCache {
     cbn_cache: CBNCache,
-    thunks: HashMap<ContentHash, CacheEntry>,
+    thunks: HashMap<SemanticHash, CacheEntry>,
 }
 
 impl IncrementalCache {
@@ -74,12 +73,12 @@ impl IncrementalCache {
     /// subsequent evaluation. Only loaded and recorded [CacheEntry]s will be saved; loadable ones
     /// (recorded from the previous evaluation but not used in the current one) are dropped.
     pub fn persist(self, _out: impl io::Write) -> io::Result<()> {
-        todo!()
+        unimplemented!()
     }
 
     /// Loads a persisted cache.
     pub fn load(_src: impl io::Read) -> io::Result<Self> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -98,7 +97,7 @@ impl Cache for IncrementalCache {
         // use that value as well
         if let ThunkState::Suspended = idx.state()
             && idx.cui().is_some()
-            && let Some(content_hash) = idx.content_hash()
+            && let Some(content_hash) = idx.semantic_hash()
             && let Some(cached) = self.thunks.get_mut(&content_hash)
         {
             idx.clone().update(cached.get().get_owned())
@@ -114,7 +113,6 @@ impl Cache for IncrementalCache {
     ) -> super::CacheIndex {
         self.cbn_cache.add(clos, bty)
     }
-
 
     fn patch<F: Fn(&mut crate::eval::Closure)>(&mut self, idx: super::CacheIndex, f: F) {
         self.cbn_cache.patch(idx, f)
@@ -132,7 +130,7 @@ impl Cache for IncrementalCache {
         // If we update a thunk of interest, now that we have a value for it, we can try to compute its
         // hash and record it for future evaluations.
         if idx.cui().is_some()
-            && let Some(content_hash) = idx.content_hash()
+            && let Some(content_hash) = idx.semantic_hash()
             && let Entry::Vacant(entry) = self.thunks.entry(content_hash)
         {
             entry.insert_entry(CacheEntry::Recorded(idx.clone()));
@@ -180,7 +178,7 @@ impl Cache for IncrementalCache {
         self.cbn_cache.make_update_index(idx)
     }
 
-    fn attach_cui(&mut self, idx: &mut super::CacheIndex, cui: ContentHash) {
+    fn attach_cui(&mut self, idx: &super::CacheIndex, cui: SemanticHash) {
         idx.set_cui(cui);
     }
 }

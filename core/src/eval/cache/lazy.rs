@@ -36,15 +36,17 @@ pub enum ThunkState {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThunkData {
     inner: InnerThunkData,
-    /// The hash of the expression represented by this thunk. Used for incremental evaluation.
-    /// Computed from [Self::cui] and the  hashes of the this thunk's dependencies.
+    /// The semantic hash of the expression represented by this thunk. Used for incremental
+    /// evaluation. Computed from [Self::cui] and the semantic hashes of the this thunk's
+    /// dependencies.
     #[cfg(feature = "incremental-experimental")]
-    hash: ThunkHash,
+    thunk_hash: ThunkHash,
     /// The Cross-evaluation Uniform Identifier. This is a semantic hash of the original expression
-    /// of the closure (and thus doesn't account for dependencies), set by the incremental
-    /// evaluator for thunks of interest.
+    /// of the closure set by the incremental evaluator for thunks of interest. It doesn't take
+    /// dependencies into account: the final semantic hash is derived from the CUI and the semantic
+    /// hashes of dependencies in the closure's environment.
     #[cfg(feature = "incremental-experimental")]
-    cui: Option<crate::eval::cui::ContentHash>,
+    cui: Option<crate::eval::semantic_hash::SemanticHash>,
     state: ThunkState,
     /// A flag indicating whether the thunk is locked. See [Thunk::lock].
     locked: bool,
@@ -141,7 +143,7 @@ impl ThunkData {
         ThunkData {
             inner: InnerThunkData::Standard(closure),
             #[cfg(feature = "incremental-experimental")]
-            hash: ThunkHash::Unknown,
+            thunk_hash: ThunkHash::Unknown,
             #[cfg(feature = "incremental-experimental")]
             cui: None,
             state: ThunkState::Suspended,
@@ -162,7 +164,7 @@ impl ThunkData {
             #[cfg(feature = "incremental-experimental")]
             cui: None,
             #[cfg(feature = "incremental-experimental")]
-            hash: ThunkHash::Unknown,
+            thunk_hash: ThunkHash::Unknown,
             state: ThunkState::Suspended,
             locked: false,
         }
@@ -357,7 +359,7 @@ impl ThunkData {
                     //TODO: what should the hash be here? I suppose it should only be actually
                     //computed when building the cached value.
                     #[cfg(feature = "incremental-experimental")]
-                    hash: ThunkHash::Unknown,
+                    thunk_hash: ThunkHash::Unknown,
                     state: ThunkState::Suspended,
                     locked: false,
                 },
@@ -692,11 +694,12 @@ impl ThunkUpdateFrame {
 mod incremental {
     use super::*;
     use crate::eval::{
-        cui::ContentHash,
+        semantic_hash::SemanticHash,
         value::{Container, EnumVariantData, ValueContentRef},
     };
     use std::hash::{DefaultHasher, Hash, Hasher};
 
+    /// Possible values of the cached semantic hash stored in the thunk.
     #[derive(Copy, Debug, PartialEq, Eq, Clone)]
     pub enum ThunkHash {
         /// The hash of this thunk can't be computed, and will never be, at least during the current
@@ -711,14 +714,14 @@ mod incremental {
         /// The hash of this thunk hasn't been computed yet. Note that an [Self::Unknwon] hash might
         /// turn to [Self::Undefined] after hashing: it doesn't have to end up as [Self::Known].
         Unknown,
-        Known(ContentHash),
+        Known(SemanticHash),
     }
 
     impl ThunkData {
-        /// Computes the content hash of a closure, given an (optional) Cross-evaluation Unique
-        /// Identifier. This is similar to [Self::compute_hash], but it doens't require a [Self] value
-        /// to exist.
-        pub fn hash_content(closure: &Closure, cui: Option<ContentHash>) -> Option<ContentHash> {
+        /// Computes the semantic hash of a closure, given an (optional) Cross-evaluation Unique
+        /// Identifier. This is similar to [Self::compute_hash], but it doens't require a [Self]
+        /// value to exist.
+        pub fn hash_content(closure: &Closure, cui: Option<SemanticHash>) -> Option<SemanticHash> {
             // TODO: For now, we're being stupid, and hash the whole environment. What we should do is
             // 1. Compute the free variables of each expression of interest
             // 2. Only retrieve the free variables as dependencies from the environment
@@ -726,7 +729,7 @@ mod incremental {
 
             for (id, thunk) in closure.env.iter_elems() {
                 id.hash(&mut hasher);
-                thunk.content_hash()?.hash(&mut hasher);
+                thunk.semantic_hash()?.hash(&mut hasher);
             }
 
             if let Some(cui) = cui {
@@ -750,77 +753,65 @@ mod incremental {
                 }
             }
 
-            Some(ContentHash(hasher.finish()))
+            Some(SemanticHash(hasher.finish()))
         }
 
-        /// Computes the hash of this thunk, ignoring any potential value in [Self::hash]. As opposed
-        /// to [Self::content_hash], beside always recomputing the hash, [Self::compute_hash] also
-        /// doesn't update [Self::hash].
-        #[inline]
-        fn compute_hash(&self) -> Option<ContentHash> {
+        /// Computes the semantic hash of this thunk, ignoring any potential value in [Self::hash].
+        /// As opposed to [Self::content_hash], beside always recomputing the hash,
+        /// [Self::compute_hash] also doesn't update [Self::hash].
+        fn compute_semantic_hash(&self) -> Option<SemanticHash> {
             Self::hash_content(self.closure_or_orig(), self.cui)
         }
 
-        /// Compute the content hash of a thunk, given the closure stored in it and the
+        /// Compute the semantic hash of a thunk, given the closure stored in it and the
         /// Cross-evaluation Unique Identifier of the corresponding expression.
-        pub fn content_hash(&mut self) -> Option<ContentHash> {
-            match self.hash {
+        pub fn semantic_hash(&mut self) -> Option<SemanticHash> {
+            match self.thunk_hash {
                 ThunkHash::Undefined => None,
                 ThunkHash::Known(content_hash) => Some(content_hash),
                 ThunkHash::Unknown => {
-                    let computed = self.compute_hash();
-                    self.hash = computed
+                    let computed = self.compute_semantic_hash();
+                    self.thunk_hash = computed
                         .map(ThunkHash::Known)
                         .unwrap_or(ThunkHash::Undefined);
                     computed
                 }
             }
         }
-
-        /// Creates new standard thunk data, and fill the content hash immediately, if computable.
-        pub fn new_hashed(closure: Closure, cui: Option<ContentHash>) -> Self {
-            let mut new = Self::new(closure);
-            new.cui = cui;
-            new.hash = new
-                .compute_hash()
-                .map(ThunkHash::Known)
-                .unwrap_or(ThunkHash::Undefined);
-
-            new
-        }
     }
 
     impl Thunk {
         /// Set the Cross-evaluation Unique Identifier to this thunk.
         #[inline]
-        pub fn set_cui(&self, cui: ContentHash) {
+        pub fn set_cui(&self, cui: SemanticHash) {
             self.data().borrow_mut().cui = Some(cui);
         }
 
         /// Attach a Cross-evaluation Unique Identifier to this thunk.
         #[inline]
-        pub fn with_cui(self, cui: ContentHash) -> Self {
+        pub fn with_cui(self, cui: SemanticHash) -> Self {
             self.set_cui(cui);
             self
         }
 
-        /// Returns the content hash of this thunk. If the hash has been computed before (and stored in
-        /// [ThunkData::hash]), returns it immediately. Otherwise, computes the hash, stores it in the
-        /// thunk data, and returns the result. In the latter case, the hash of the (transitive)
-        /// dependencies are retrieved in the same way (either from a previous computations, or
-        /// computed on-demand).
+        /// Returns the semantic hash of this thunk. If the hash has been computed before (and
+        /// stored in [ThunkData::hash]), returns it immediately. Otherwise, get the semantic hash
+        /// of the dependencies, computes the semantic hash of this thunk using the CUI, and
+        /// returns the result. In the latter case, the hash of the (transitive) dependencies are
+        /// recursively fetched in the same way (they were either cached from a previous
+        /// computations, or are computed on-demand).
         ///
         /// # Return
         ///
         /// Returns `None` if any of the transitive dependencies of this thunk has a hash with
         /// value [ThunkHash::Undefined].
         #[inline]
-        pub fn content_hash(&self) -> Option<ContentHash> {
-            self.data().borrow_mut().content_hash()
+        pub fn semantic_hash(&self) -> Option<SemanticHash> {
+            self.data().borrow_mut().semantic_hash()
         }
 
         #[inline]
-        pub fn cui(&self) -> Option<ContentHash> {
+        pub fn cui(&self) -> Option<SemanticHash> {
             self.data().borrow().cui
         }
     }
