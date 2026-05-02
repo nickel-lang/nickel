@@ -60,6 +60,7 @@ pub struct InputOptions<Customize: clap::Args, InputFormatOptions: clap::Args> {
     pub package_cache_dir: Option<PathBuf>,
 
     /// Enable incremental evaluation (experimental)
+    #[cfg(feature = "incremental-experimental")]
     #[arg(long, global = true)]
     pub incremental: bool,
 }
