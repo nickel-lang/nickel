@@ -693,11 +693,7 @@ impl ThunkUpdateFrame {
 #[cfg(feature = "incremental-experimental")]
 mod incremental {
     use super::*;
-    use crate::eval::{
-        semantic_hash::SemanticHash,
-        value::{Container, EnumVariantData, ValueContentRef},
-    };
-    use std::hash::{DefaultHasher, Hash, Hasher};
+    use crate::eval::semantic_hash::{SemanticHash, semantic_hash};
 
     /// Possible values of the cached semantic hash stored in the thunk.
     #[derive(Copy, Debug, PartialEq, Eq, Clone)]
@@ -718,51 +714,6 @@ mod incremental {
     }
 
     impl ThunkData {
-        /// Computes the semantic hash of a closure, given an (optional) Cross-evaluation Unique
-        /// Identifier. This is similar to [Self::compute_hash], but it doens't require a [Self]
-        /// value to exist.
-        pub fn hash_content(closure: &Closure, cui: Option<SemanticHash>) -> Option<SemanticHash> {
-            // TODO: For now, we're being stupid, and hash the whole environment. What we should do is
-            // 1. Compute the free variables of each expression of interest
-            // 2. Only retrieve the free variables as dependencies from the environment
-            let mut hasher = DefaultHasher::new();
-
-            for (id, thunk) in closure.env.iter_elems() {
-                id.hash(&mut hasher);
-                thunk.semantic_hash()?.hash(&mut hasher);
-            }
-
-            if let Some(cui) = cui {
-                cui.hash(&mut hasher);
-            } else {
-                // If we don't have a cross-evaluation unique identifier, we still try to structurally
-                // hash simple constants, that don't involve other expressions.
-                closure.value.tag().hash(&mut hasher);
-
-                match closure.value.content_ref() {
-                    ValueContentRef::Null => 0.hash(&mut hasher),
-                    ValueContentRef::Bool(b) => b.hash(&mut hasher),
-                    ValueContentRef::Number(n) => n.hash(&mut hasher),
-                    ValueContentRef::String(s) => s.hash(&mut hasher),
-                    ValueContentRef::EnumVariant(EnumVariantData { tag, arg: None }) => {
-                        tag.hash(&mut hasher)
-                    }
-                    ValueContentRef::Array(Container::Empty)
-                    | ValueContentRef::Record(Container::Empty) => 0.hash(&mut hasher),
-                    _ => return None,
-                }
-            }
-
-            Some(SemanticHash(hasher.finish()))
-        }
-
-        /// Computes the semantic hash of this thunk, ignoring any potential value in [Self::hash].
-        /// As opposed to [Self::content_hash], beside always recomputing the hash,
-        /// [Self::compute_hash] also doesn't update [Self::hash].
-        fn compute_semantic_hash(&self) -> Option<SemanticHash> {
-            Self::hash_content(self.closure_or_orig(), self.cui)
-        }
-
         /// Compute the semantic hash of a thunk, given the closure stored in it and the
         /// Cross-evaluation Unique Identifier of the corresponding expression.
         pub fn semantic_hash(&mut self) -> Option<SemanticHash> {
@@ -770,7 +721,7 @@ mod incremental {
                 ThunkHash::Undefined => None,
                 ThunkHash::Known(content_hash) => Some(content_hash),
                 ThunkHash::Unknown => {
-                    let computed = self.compute_semantic_hash();
+                    let computed = semantic_hash(self.closure(), self.cui);
                     self.thunk_hash = computed
                         .map(ThunkHash::Known)
                         .unwrap_or(ThunkHash::Undefined);
