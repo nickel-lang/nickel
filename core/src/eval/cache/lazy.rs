@@ -755,10 +755,21 @@ mod incremental {
         /// # Return
         ///
         /// Returns `None` if any of the transitive dependencies of this thunk has a hash with
-        /// value [ThunkHash::Undefined].
+        /// value [ThunkHash::Undefined], or if there is a loop in the dependencies (co-recursive
+        /// thunks of interest). It means that for now, we can never cache co-recursive thunks.
+        /// There might be a way to handle them properly, but this is left for future work.
         #[inline]
         pub fn semantic_hash(&self) -> Option<SemanticHash> {
-            self.data().borrow_mut().semantic_hash()
+            // `semantic_hash` calls to its dependencies' `semantic_hash` recursively, which can
+            // cause an infinite loop for co-recursive thunks. We could use locking to prevent
+            // that, but there is one issue: we do the recursion while keeping the mutable borrow
+            // to the original thunk (and all thunk encountered on the way). By the time we check
+            // the lock state, `borrow_mut()` would have already panic.
+            //
+            // We could organize the code to avoid that (releasing the borrow before recursing).
+            // However, we can in fact turn this to our avantage and use `RefCell` itself as a lock
+            // mechanism for no additional cost: if there's a loop, `try_borrow_mut` will fail.
+            self.data().try_borrow_mut().ok()?.semantic_hash()
         }
 
         #[inline]
