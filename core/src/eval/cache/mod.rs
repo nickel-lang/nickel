@@ -93,7 +93,7 @@ pub trait Cache: Clone {
     /// The default implementation does nothing, which is the behavior for caches that don't
     /// support incremental evaluation, such as the default CBN cache. In practice we never expect
     /// to actually call [Self::attach_cui] on such caches: a VM with incremental evaluation
-    /// enabled should always use a cache that supports incremental evaluation in practice, but we
+    /// enabled should always use a cache that supports incremental evaluation, but we
     /// still need to have this method in the general cache interface.
     #[cfg(feature = "incremental-experimental")]
     fn attach_cui(&mut self, _idx: &CacheIndex, _cui: crate::eval::semantic_hash::SemanticHash) {}
