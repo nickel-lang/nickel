@@ -707,7 +707,7 @@ mod incremental {
         /// of any (direct or indirect) reverse dependency of this thunk will lead to an undefined hash
         /// as well.
         Undefined,
-        /// The hash of this thunk hasn't been computed yet. Note that an [Self::Unknwon] hash might
+        /// The hash of this thunk hasn't been computed yet. Note that an [Self::Unknown] hash might
         /// turn to [Self::Undefined] after hashing: it doesn't have to end up as [Self::Known].
         Unknown,
         Known(SemanticHash),
