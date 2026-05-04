@@ -11,7 +11,7 @@ use std::{
     io,
 };
 
-/// A thunk coming from a preivous evaluation. Can be lazily loaded as a normal thunk if needed.
+/// A thunk coming from a previous evaluation. Can be lazily loaded as a normal thunk if needed.
 #[derive(Clone)]
 pub struct LoadableThunk(Thunk);
 
