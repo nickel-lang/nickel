@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use nickel_lang_core::{
     error::{Error, IOError},
-    eval::{cache::lazy::CBNCache, value::NickelValue},
+    eval::{cache::CacheImpl, value::NickelValue},
     program::Program,
     serialize::{self, ExportFormat},
 };
@@ -31,7 +31,7 @@ impl ExportCommand {
         ctxt.with_program(&self.input, |program| self.export(program));
     }
 
-    fn export(&self, program: &mut Program<CBNCache>) -> Result<(), Error> {
+    fn export(&self, program: &mut Program<CacheImpl>) -> Result<(), Error> {
         let rt = program.eval_full_for_export()?;
 
         serialize::validate(self.format, &rt)
@@ -50,7 +50,7 @@ impl ExportCommand {
 
     fn export_to(
         &self,
-        program: &mut Program<CBNCache>,
+        program: &mut Program<CacheImpl>,
         value: &NickelValue,
         mut out: impl std::io::Write,
     ) -> Result<(), Error> {

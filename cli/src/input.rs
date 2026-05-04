@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use nickel_lang_core::{
     ast::InputFormat,
-    eval::cache::lazy::CBNCache,
+    eval::cache::CacheImpl,
     files::Files,
     program::{Program, ProgramBuilder},
 };
@@ -23,8 +23,8 @@ pub struct InputOptions<Customize: clap::Args, InputFormatOptions: clap::Args> {
     #[arg(long)]
     apply_contract: Vec<PathBuf>,
 
-    #[cfg(debug_assertions)]
     /// Skips the standard library import. For debugging only
+    #[cfg(debug_assertions)]
     #[arg(long, global = true)]
     pub nostdlib: bool,
 
@@ -52,12 +52,17 @@ pub struct InputOptions<Customize: clap::Args, InputFormatOptions: clap::Args> {
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
 
-    #[arg(long, global = true)]
     /// Filesystem location for caching fetched packages.
     ///
     /// Defaults to an appropriate platform-dependent value, like
     /// `$XDG_CACHE_HOME/nickel` on linux.
+    #[arg(long, global = true)]
     pub package_cache_dir: Option<PathBuf>,
+
+    /// Enable incremental evaluation (experimental)
+    #[cfg(feature = "incremental-experimental")]
+    #[arg(long, global = true)]
+    pub incremental: bool,
 }
 
 pub enum PrepareError {
@@ -81,11 +86,11 @@ impl<E: Into<crate::error::Error>> From<E> for PrepareError {
 pub type PrepareResult<T> = Result<T, PrepareError>;
 
 pub trait Prepare {
-    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CBNCache>>;
+    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CacheImpl>>;
 }
 
 impl<C: clap::Args + Customize, F: clap::Args + InputFormatOptions> Prepare for InputOptions<C, F> {
-    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CBNCache>> {
+    fn prepare(&self, ctx: &mut GlobalContext) -> PrepareResult<Program<CacheImpl>> {
         // Resolve the package map first — it's independent of program construction and may itself
         // fail (manifest open / lock / package fetch).
         #[cfg(feature = "package-experimental")]
@@ -147,6 +152,11 @@ impl<C: clap::Args + Customize, F: clap::Args + InputFormatOptions> Prepare for 
         #[cfg(feature = "package-experimental")]
         if let Some(map) = package_map {
             builder = builder.with_package_map(map);
+        }
+
+        #[cfg(feature = "incremental-experimental")]
+        if self.incremental {
+            builder = builder.with_incremental_evaluation();
         }
 
         // The builder defers all I/O to `build()`, so any failure here is from opening an input

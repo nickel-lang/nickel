@@ -1,5 +1,5 @@
 use nickel_lang_core::{
-    eval::cache::lazy::CBNCache,
+    eval::cache::CacheImpl,
     program::{Program, ProgramBuilder},
     term::{TypeAnnotation, make as mk_term, record::FieldMetadata},
 };
@@ -10,7 +10,7 @@ trait ProgramExt {
     fn with_field_path(self, path: &str) -> Self;
 }
 
-impl ProgramExt for Program<CBNCache> {
+impl ProgramExt for Program<CacheImpl> {
     fn with_field_path(mut self, path: &str) -> Self {
         self.field = self.parse_field_path(path.to_owned()).unwrap();
         self

@@ -13,7 +13,7 @@ use nickel_lang_core::{
     },
     eval::{
         Closure, Environment,
-        cache::{CacheImpl, lazy::CBNCache},
+        cache::CacheImpl,
         value::{Container, NickelValue, ValueContent, ValueContentRef, lens::TermContent},
     },
     identifier::{Ident, LocIdent},
@@ -256,7 +256,7 @@ impl TestCommand {
     /// Returns the number of test failures.
     fn run_tests(
         &self,
-        program: &mut Program<CBNCache>,
+        program: &mut Program<CacheImpl>,
         color: ColorOpt,
     ) -> Result<usize, CoreError> {
         let (spine, registry) = self.prepare_tests(program)?;

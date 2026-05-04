@@ -8,7 +8,7 @@ use std::{collections::HashMap, ffi::OsString};
 use clap::Parser;
 use nickel_lang_core::{
     combine::Combine,
-    eval::cache::lazy::CBNCache,
+    eval::cache::CacheImpl,
     identifier::LocIdent,
     program::{FieldPath, Program},
     term::{
@@ -242,7 +242,7 @@ impl CustomizableFields {
 
 pub trait Customize {
     /// Customize the program with the given options.
-    fn customize(&self, program: Program<CBNCache>) -> PrepareResult<Program<CBNCache>>;
+    fn customize(&self, program: Program<CacheImpl>) -> PrepareResult<Program<CacheImpl>>;
     /// Return the value of the `field` argument, if specified and if supported by the current
     /// customize variant.
     fn field(&self) -> Option<&String> {
@@ -256,8 +256,8 @@ impl CustomizeOptions {
     fn do_customize(
         self,
         customizable_fields: CustomizableFields,
-        mut program: Program<CBNCache>,
-    ) -> CliResult<Program<CBNCache>> {
+        mut program: Program<CacheImpl>,
+    ) -> CliResult<Program<CacheImpl>> {
         let assignment_overrides: Result<Vec<_>, CliUsageError> = self
             .assignment
             .into_iter()
@@ -330,7 +330,7 @@ impl CustomizeOptions {
 impl CustomizeMode {
     // Contains most of the actual implementation of the customizing logic for overriding, but
     // doesn't set the extracted field.
-    fn customize_impl(&self, mut program: Program<CBNCache>) -> PrepareResult<Program<CBNCache>> {
+    fn customize_impl(&self, mut program: Program<CacheImpl>) -> PrepareResult<Program<CacheImpl>> {
         if self.customize_mode.is_empty() {
             return Ok(program);
         }
@@ -359,7 +359,7 @@ impl Customize for CustomizeMode {
     // XXX: we should give a nice error message when someone tries to evaluate some
     //      expression that has unset values, telling them they can set them using
     //      this method
-    fn customize(&self, program: Program<CBNCache>) -> PrepareResult<Program<CBNCache>> {
+    fn customize(&self, program: Program<CacheImpl>) -> PrepareResult<Program<CacheImpl>> {
         program_with_field(
             self.customize_impl(program)?,
             self.extract_field.field.clone(),
@@ -383,7 +383,7 @@ pub struct ExtractFieldOnly {
 }
 
 impl Customize for ExtractFieldOnly {
-    fn customize(&self, program: Program<CBNCache>) -> PrepareResult<Program<CBNCache>> {
+    fn customize(&self, program: Program<CacheImpl>) -> PrepareResult<Program<CacheImpl>> {
         program_with_field(program, self.field.clone())
     }
 
@@ -397,15 +397,15 @@ impl Customize for ExtractFieldOnly {
 pub struct NoCustomizeMode;
 
 impl Customize for NoCustomizeMode {
-    fn customize(&self, program: Program<CBNCache>) -> PrepareResult<Program<CBNCache>> {
+    fn customize(&self, program: Program<CacheImpl>) -> PrepareResult<Program<CacheImpl>> {
         Ok(program)
     }
 }
 
 fn program_with_field(
-    mut program: Program<CBNCache>,
+    mut program: Program<CacheImpl>,
     field: Option<String>,
-) -> PrepareResult<Program<CBNCache>> {
+) -> PrepareResult<Program<CacheImpl>> {
     if let Some(field) = field {
         program.field = program
             .parse_field_path(field)

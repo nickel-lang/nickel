@@ -10,16 +10,18 @@ use crate::{
     term::{BindingType, record::FieldDeps},
 };
 
+#[cfg(feature = "incremental-experimental")]
+pub mod incremental_ng;
 pub mod lazy;
-// pub mod incremental;
 
 /// An index to a specific item stored in the cache
 pub type CacheIndex = lazy::Thunk;
-// pub type CacheIndex = usize;
 
 /// The current Cache implementation
+#[cfg(not(feature = "incremental-experimental"))]
 pub type CacheImpl = lazy::CBNCache;
-// pub type CacheImpl = incremental::IncCache;
+#[cfg(feature = "incremental-experimental")]
+pub type CacheImpl = incremental_ng::IncrementalCache;
 
 /// A black-holed node was accessed, which would lead to infinite recursion.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -59,12 +61,6 @@ pub trait Cache: Clone {
     /// Resets the state of the element at index `idx` to `Suspended`
     fn reset_index_state(&mut self, idx: &mut Self::UpdateIndex);
 
-    fn map_at_index<F: FnMut(&mut Self, &Closure) -> Closure>(
-        &mut self,
-        idx: &CacheIndex,
-        f: F,
-    ) -> CacheIndex;
-
     /// Initializes the cached value of the element at index `idx` with the given `rec_env`.
     fn build_cached(&mut self, idx: &mut CacheIndex, rec_env: &[(Ident, CacheIndex)]);
 
@@ -90,4 +86,15 @@ pub trait Cache: Clone {
         &mut self,
         idx: &mut CacheIndex,
     ) -> Result<Self::UpdateIndex, BlackholedError>;
+
+    /// Attach a [CUI][crate::eval::cui] to the given index, thereby marking it as being of
+    /// interest for incremental evaluation.
+    ///
+    /// The default implementation does nothing, which is the behavior for caches that don't
+    /// support incremental evaluation, such as the default CBN cache. In practice we never expect
+    /// to actually call [Self::attach_cui] on such caches: a VM with incremental evaluation
+    /// enabled should always use a cache that supports incremental evaluation, but we
+    /// still need to have this method in the general cache interface.
+    #[cfg(feature = "incremental-experimental")]
+    fn attach_cui(&mut self, _idx: &CacheIndex, _cui: crate::eval::semantic_hash::SemanticHash) {}
 }

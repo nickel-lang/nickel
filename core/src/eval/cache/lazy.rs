@@ -7,8 +7,11 @@ use crate::{
     position::PosIdx,
     term::{BindingType, Term, record::FieldDeps},
 };
-use std::cell::{Ref, RefCell, RefMut};
-use std::rc::Rc;
+
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    rc::Rc,
+};
 
 /// The state of a thunk.
 ///
@@ -33,6 +36,17 @@ pub enum ThunkState {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThunkData {
     inner: InnerThunkData,
+    /// The semantic hash of the expression represented by this thunk. Used for incremental
+    /// evaluation. Computed from [Self::cui] and the semantic hashes of the this thunk's
+    /// dependencies.
+    #[cfg(feature = "incremental-experimental")]
+    thunk_hash: ThunkHash,
+    /// The Cross-evaluation Uniform Identifier. This is a semantic hash of the original expression
+    /// of the closure set by the incremental evaluator for thunks of interest. It doesn't take
+    /// dependencies into account: the final semantic hash is derived from the CUI and the semantic
+    /// hashes of dependencies in the closure's environment.
+    #[cfg(feature = "incremental-experimental")]
+    cui: Option<crate::eval::semantic_hash::SemanticHash>,
     state: ThunkState,
     /// A flag indicating whether the thunk is locked. See [Thunk::lock].
     locked: bool,
@@ -128,6 +142,10 @@ impl ThunkData {
     pub fn new(closure: Closure) -> Self {
         ThunkData {
             inner: InnerThunkData::Standard(closure),
+            #[cfg(feature = "incremental-experimental")]
+            thunk_hash: ThunkHash::Unknown,
+            #[cfg(feature = "incremental-experimental")]
+            cui: None,
             state: ThunkState::Suspended,
             locked: false,
         }
@@ -143,6 +161,10 @@ impl ThunkData {
                 cached: None,
                 deps,
             },
+            #[cfg(feature = "incremental-experimental")]
+            cui: None,
+            #[cfg(feature = "incremental-experimental")]
+            thunk_hash: ThunkHash::Unknown,
             state: ThunkState::Suspended,
             locked: false,
         }
@@ -247,7 +269,7 @@ impl ThunkData {
             // revertible thunks corresponding to a recursive record, and only then can we patch
             // them (build the cached value) in a second step. But calling to [`ThunkData::new_rev`]
             // followed by [`ThunkData::build_cached_value`] should be logically seen as just one
-            // construction operation.
+            // atomic operation.
             InnerThunkData::Revertible { ref cached, .. } => {
                 cached.as_ref().expect(REVTHUNK_NO_CACHED_VALUE_MSG)
             }
@@ -321,53 +343,28 @@ impl ThunkData {
     ///
     /// The new thunk is unlocked, regardless of the locking status of the original thunk.
     pub fn revert(thunk: &Thunk) -> Thunk {
-        match thunk.data().borrow().inner {
+        let thunk_data = thunk.data().borrow();
+
+        match &thunk_data.inner {
             InnerThunkData::Standard(_) => thunk.clone(),
-            InnerThunkData::Revertible {
-                ref orig, ref deps, ..
-            } => Thunk(NickelValue::thunk(
+            InnerThunkData::Revertible { orig, deps, .. } => Thunk(NickelValue::thunk(
                 ThunkData {
                     inner: InnerThunkData::Revertible {
                         orig: Rc::clone(orig),
                         cached: None,
                         deps: deps.clone(),
                     },
+                    #[cfg(feature = "incremental-experimental")]
+                    cui: thunk_data.cui,
+                    //TODO: what should the hash be here? I suppose it should only be actually
+                    //computed when building the cached value.
+                    #[cfg(feature = "incremental-experimental")]
+                    thunk_hash: ThunkHash::Unknown,
                     state: ThunkState::Suspended,
                     locked: false,
                 },
                 thunk.0.pos_idx(),
             )),
-        }
-    }
-
-    /// Map a function over the content of the thunk to create a new independent thunk. If the
-    /// thunk is revertible, the mapping function is applied on both the original expression and
-    /// the cached expression.
-    ///
-    /// The new thunk is unlocked, whatever the locking status of the original thunk.
-    pub fn map<F>(&self, mut f: F) -> Self
-    where
-        F: FnMut(&Closure) -> Closure,
-    {
-        match self.inner {
-            InnerThunkData::Standard(ref c) => ThunkData {
-                inner: InnerThunkData::Standard(f(c)),
-                state: self.state,
-                locked: false,
-            },
-            InnerThunkData::Revertible {
-                ref orig,
-                ref deps,
-                ref cached,
-            } => ThunkData {
-                inner: InnerThunkData::Revertible {
-                    orig: Rc::new(f(orig)),
-                    cached: cached.as_ref().map(f),
-                    deps: deps.clone(),
-                },
-                state: self.state,
-                locked: false,
-            },
         }
     }
 
@@ -635,19 +632,6 @@ impl Thunk {
         })
     }
 
-    /// Map a function over the content of the thunk to create a new, fresh independent thunk. If
-    /// the thunk is revertible, the function is applied to both the original expression and the
-    /// cached expression.
-    pub fn map<F>(&self, f: F) -> Self
-    where
-        F: FnMut(&Closure) -> Closure,
-    {
-        Thunk(NickelValue::thunk(
-            self.data().borrow().map(f),
-            self.0.pos_idx(),
-        ))
-    }
-
     /// Determine if a thunk is worth being put on the stack for future update.
     ///
     /// Typically, expressions in weak head normal form won't evaluate further and their update can
@@ -706,8 +690,100 @@ impl ThunkUpdateFrame {
     }
 }
 
+#[cfg(feature = "incremental-experimental")]
+mod incremental {
+    use super::*;
+    use crate::eval::semantic_hash::{SemanticHash, semantic_hash};
+
+    /// Possible values of the cached semantic hash stored in the thunk.
+    #[derive(Copy, Debug, PartialEq, Eq, Clone)]
+    pub enum ThunkHash {
+        /// The hash of this thunk can't be computed, and will never be, at least during the current
+        /// run.
+        ///
+        /// This happens for thunks that aren't deemed worth of being versioned by the incremental
+        /// evaluator, and aren't simple enough to compute their hash structurally (the hash of
+        /// constants is typically always defined). This hash value is contagious: computing the hash
+        /// of any (direct or indirect) reverse dependency of this thunk will lead to an undefined hash
+        /// as well.
+        Undefined,
+        /// The hash of this thunk hasn't been computed yet. Note that an [Self::Unknown] hash might
+        /// turn to [Self::Undefined] after hashing: it doesn't have to end up as [Self::Known].
+        Unknown,
+        Known(SemanticHash),
+    }
+
+    impl ThunkData {
+        /// Compute the semantic hash of a thunk, given the closure stored in it and the
+        /// Cross-evaluation Unique Identifier of the corresponding expression.
+        pub fn semantic_hash(&mut self) -> Option<SemanticHash> {
+            match self.thunk_hash {
+                ThunkHash::Undefined => None,
+                ThunkHash::Known(content_hash) => Some(content_hash),
+                ThunkHash::Unknown => {
+                    let computed = semantic_hash(self.closure(), self.cui);
+                    self.thunk_hash = computed
+                        .map(ThunkHash::Known)
+                        .unwrap_or(ThunkHash::Undefined);
+                    computed
+                }
+            }
+        }
+    }
+
+    impl Thunk {
+        /// Set the Cross-evaluation Unique Identifier to this thunk.
+        #[inline]
+        pub fn set_cui(&self, cui: SemanticHash) {
+            self.data().borrow_mut().cui = Some(cui);
+        }
+
+        /// Attach a Cross-evaluation Unique Identifier to this thunk.
+        #[inline]
+        pub fn with_cui(self, cui: SemanticHash) -> Self {
+            self.set_cui(cui);
+            self
+        }
+
+        /// Returns the semantic hash of this thunk. If the hash has been computed before (and
+        /// stored in [ThunkData::hash]), returns it immediately. Otherwise, get the semantic hash
+        /// of the dependencies, computes the semantic hash of this thunk using the CUI, and
+        /// returns the result. In the latter case, the hash of the (transitive) dependencies are
+        /// recursively fetched in the same way (they were either cached from a previous
+        /// computations, or are computed on-demand).
+        ///
+        /// # Return
+        ///
+        /// Returns `None` if any of the transitive dependencies of this thunk has a hash with
+        /// value [ThunkHash::Undefined], or if there is a loop in the dependencies (co-recursive
+        /// thunks of interest). It means that for now, we can never cache co-recursive thunks.
+        /// There might be a way to handle them properly, but this is left for future work.
+        #[inline]
+        pub fn semantic_hash(&self) -> Option<SemanticHash> {
+            // `semantic_hash` calls to its dependencies' `semantic_hash` recursively, which can
+            // cause an infinite loop for co-recursive thunks. We could use locking to prevent
+            // that, but there is one issue: we do the recursion while keeping the mutable borrow
+            // to the original thunk (and all thunk encountered on the way). By the time we check
+            // the lock state, `borrow_mut()` would have already panic.
+            //
+            // We could organize the code to avoid that (releasing the borrow before recursing).
+            // However, we can in fact turn this to our avantage and use `RefCell` itself as a lock
+            // mechanism for no additional cost: if there's a loop, `try_borrow_mut` will fail.
+            self.data().try_borrow_mut().ok()?.semantic_hash()
+        }
+
+        #[inline]
+        pub fn cui(&self) -> Option<SemanticHash> {
+            self.data().borrow().cui
+        }
+    }
+}
+
+#[cfg(feature = "incremental-experimental")]
+pub use incremental::*;
+
 /// Placeholder [Cache] for the call-by-need evaluation strategy.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct CBNCache {}
 
 impl Cache for CBNCache {
@@ -771,15 +847,6 @@ impl Cache for CBNCache {
     #[inline]
     fn reset_index_state(&mut self, idx: &mut Self::UpdateIndex) {
         idx.reset_state();
-    }
-
-    #[inline]
-    fn map_at_index<F: FnMut(&mut Self, &Closure) -> Closure>(
-        &mut self,
-        idx: &CacheIndex,
-        mut f: F,
-    ) -> CacheIndex {
-        idx.map(|v| f(self, v))
     }
 
     #[inline]

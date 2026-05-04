@@ -24,6 +24,7 @@ format = ["nickel-lang-core/format", "dep:tempfile"]
 metrics = ["dep:metrics", "dep:metrics-util", "nickel-lang-core/metrics"]
 nix-experimental = ["nickel-lang-core/nix-experimental"]
 package-experimental = ["nickel-lang-package", "gix"]
+incremental-experimental = ["nickel-lang-core/incremental-experimental"]
 
 [dependencies]
 nickel-lang-core = { workspace = true, features = [ "markdown", "clap" ], default-features = false }

@@ -1506,7 +1506,7 @@ impl_display_from_pretty!(NickelValue);
 
 /// Pointer tag used by [NickelValue] to discriminate between the pointer and non-pointer kind of Nickel values.
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 ///////////
 // CAUTION
 ///////////

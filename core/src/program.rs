@@ -1025,6 +1025,8 @@ pub struct ProgramBuilder<R = NullReporter, W = io::Sink> {
     contract_paths: Vec<OsString>,
     import_paths: Vec<PathBuf>,
     package_map: Option<PackageMap>,
+    #[cfg(feature = "incremental-experimental")]
+    enable_incremental_evaluation: bool,
     trace: W,
     reporter: R,
 }
@@ -1047,6 +1049,8 @@ impl ProgramBuilder {
             contract_paths: Vec::new(),
             import_paths: Vec::new(),
             package_map: None,
+            #[cfg(feature = "incremental-experimental")]
+            enable_incremental_evaluation: false,
             trace: io::sink(),
             reporter: NullReporter {},
         }
@@ -1167,6 +1171,8 @@ impl<R, W> ProgramBuilder<R, W> {
             contract_paths: self.contract_paths,
             import_paths: self.import_paths,
             package_map: self.package_map,
+            #[cfg(feature = "incremental-experimental")]
+            enable_incremental_evaluation: self.enable_incremental_evaluation,
             trace,
             reporter: self.reporter,
         }
@@ -1185,9 +1191,18 @@ impl<R, W> ProgramBuilder<R, W> {
             contract_paths: self.contract_paths,
             import_paths: self.import_paths,
             package_map: self.package_map,
+            #[cfg(feature = "incremental-experimental")]
+            enable_incremental_evaluation: self.enable_incremental_evaluation,
             trace: self.trace,
             reporter,
         }
+    }
+
+    /// Enable incremental evaluation (experimental). Disabled by default.
+    #[cfg(feature = "incremental-experimental")]
+    pub fn with_incremental_evaluation(mut self) -> Self {
+        self.enable_incremental_evaluation = true;
+        self
     }
 }
 
@@ -1211,6 +1226,8 @@ where
             contract_paths,
             import_paths,
             package_map,
+            #[cfg(feature = "incremental-experimental")]
+            enable_incremental_evaluation,
             trace,
             reporter,
         } = self;
@@ -1266,7 +1283,13 @@ where
             contracts.push(ProgramContract::Source(file_id));
         }
 
-        let vm_ctxt = VmContext::new(cache, trace, reporter);
+        #[allow(unused_mut)]
+        let mut vm_ctxt = VmContext::new(cache, trace, reporter);
+
+        #[cfg(feature = "incremental-experimental")]
+        if enable_incremental_evaluation {
+            vm_ctxt = vm_ctxt.with_incremental_evaluation();
+        }
 
         Ok(Program {
             main_id,
