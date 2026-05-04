@@ -146,7 +146,7 @@ pub struct VmContext<R: ImportResolver, C: Cache> {
     /// The position table, mapping position indices to spans.
     pub pos_table: PosTable,
     /// Whether incremental evaluation is enabled or not. Incremental evaluation is currently
-    /// feature-gated, but even when compiled by the feature, it needs to be explicitly enabled
+    /// feature-gated, but even when compiled with the feature, it needs to be explicitly enabled
     /// through this feature.
     #[cfg(feature = "incremental-experimental")]
     pub enable_incremental_evaluation: bool,
