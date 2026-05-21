@@ -393,7 +393,7 @@ installables=(cli lsp/nls)
 # the same order they appear here, so if there's any dependency between them,
 # please list them in a topological order.
 # TODO: we should only try to publish crates that were actually updated
-crates_to_publish=(vector git flock parser core package "${installables[@]}")
+crates_to_publish=(vector git flock parser core package nickel "${installables[@]}")
 
 # The crates below aren't published on crates.io because they are only
 # dev-dependencies of the crates to publish (used for tests and benchmarks).
