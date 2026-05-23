@@ -88,7 +88,7 @@
       # Additional packages required to build Nickel on Darwin
       systemSpecificPkgs =
         if pkgs.stdenv.isDarwin then
-          [ pkgs.darwin.libiconv ]
+          [ pkgs.pkgsStatic.darwin.libiconv ]
         else
           [ ];
 
