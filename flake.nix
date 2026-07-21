@@ -93,7 +93,7 @@
       # Additional packages required to build Nickel on Darwin
       systemSpecificPkgs =
         if pkgs.stdenv.isDarwin then
-          [ pkgs.darwin.libiconv ]
+          [ pkgs.pkgsStatic.darwin.libiconv ]
         else
           [ ];
 
@@ -309,31 +309,53 @@
               featuresArg = pkgs.lib.optionalString
                 (extraNickelFeatures != [ ])
                 ("--features " + pkgs.lib.strings.concatStringsSep " " extraNickelFeatures);
+              # Darwin libiconv is pulled in by the `libc` crate's build
+              # script (`cargo:rustc-link-lib=iconv`).
+              # including Darwin stdenv will prepend `pkgs.darwin.libiconv` to the link path,
+              # so without intervention the resulting binary pulls in
+              # `/nix/store/...libiconv.dylib`.
+              # Prepend the static archive's lib directory to rustc's native search path
+              # so `-liconv` resolves to `libiconv.a` first under Apple ld's
+              # `-search_paths_first` default.
+              darwinStaticIconv = pkgs.pkgsStatic.darwin.libiconv;
+              darwinIconvRustflags =
+                "-L native=${darwinStaticIconv.dev}/lib";
+              baseEnv = {
+                PYO3_PYTHON = "${pkgs.python3}/bin/python";
+              } // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
+                RUSTFLAGS = darwinIconvRustflags;
+              };
+              base = {
+                inherit
+                  pname
+                  pnameSuffix
+                  src
+                  version
+                  cargoArtifacts;
+
+                # pyo3 needs a Python interpreter in the build environment
+                # https://pyo3.rs/v0.17.3/building_and_distribution#configuring-the-python-version
+                nativeBuildInputs = with pkgs; [ pkg-config python3 ];
+                # A git binary is needed for some of the tests
+                buildInputs = with pkgs;
+                  [ git ]
+                    ++ pkgs.lib.optionals
+                    (builtins.elem "nix-experimental" extraNickelFeatures)
+                    [ boost nix ]
+                    ++ pkgs.lib.optional pkgs.stdenv.isDarwin darwinStaticIconv;
+
+                cargoExtraArgs = "${cargoBuildExtraArgs} ${featuresArg} ${extraBuildArgs} --workspace";
+                CARGO_PROFILE = profile;
+                env = baseEnv;
+              };
             in
             # The `cargoArtifacts` are the dependencies of the workspace, so we
-              # can reuse them in the build.
-            craneLib.buildPackage ({
-              inherit
-                pname
-                pnameSuffix
-                src
-                version
-                cargoArtifacts;
-
-              # pyo3 needs a Python interpreter in the build environment
-              # https://pyo3.rs/v0.17.3/building_and_distribution#configuring-the-python-version
-              nativeBuildInputs = with pkgs; [ pkg-config python3 ];
-              # A git binary is needed for some of the tests
-              buildInputs = with pkgs;
-                [ git ]
-                  ++ pkgs.lib.optionals
-                  (builtins.elem "nix-experimental" extraNickelFeatures)
-                  [ boost nix ];
-
-              cargoExtraArgs = "${cargoBuildExtraArgs} ${featuresArg} ${extraBuildArgs} --workspace";
-              CARGO_PROFILE = profile;
-              env.PYO3_PYTHON = "${pkgs.python3}/bin/python";
-            } // extraArgs);
+            # can reuse them in the build. Merge `env` from `extraArgs` rather
+            # than replace it so callers that pass an `env` (e.g. for
+            # `NICKEL_NIX_BUILD_REV`) don't clobber the darwin RUSTFLAGS.
+            craneLib.buildPackage (base // extraArgs // {
+              env = baseEnv // (extraArgs.env or { });
+            });
 
           # To build Nickel and its dependencies statically we use the musl
           # libc and clang with libc++ to build C and C++ dependencies. We
