@@ -257,6 +257,8 @@ impl<'ast> Loader<'ast> {
                             metadata: FieldMetadata::default(),
                             value: Some(node),
                             pos: TermPos::default(),
+                            #[cfg(feature = "incremental-experimental")]
+                            semantic_hash: Default::default(),
                         });
                     } else {
                         self.err = Some(ParseError::ExternalFormatError(
@@ -733,6 +735,8 @@ fn load<'ast>(
                 pattern: ast::pattern::Pattern::any((*id).into()),
                 metadata: Default::default(),
                 value: rename_vars(alloc, value.clone(), &renamed_bindings),
+                #[cfg(feature = "incremental-experimental")]
+                semantic_hash: Default::default(),
             });
         // unwrap: the error was Infallible
         Ok(alloc.let_block(bindings, main_term, true).into())

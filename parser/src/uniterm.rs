@@ -381,6 +381,8 @@ impl<'ast> UniRecord<'ast> {
                             priority: MergePriority::Neutral,
                         },
                     pos: _,
+                    #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: _,
                 } => Ok(RecordRows(RecordRowsF::Extend {
                     row: RecordRow {
                         id,

@@ -205,6 +205,8 @@ impl<'ast> Field<'ast, Record<'ast>> {
             metadata: self.metadata,
             value: None,
             pos: TermPos::None,
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Default::default(),
         });
         self.state
     }
@@ -223,6 +225,8 @@ impl<'ast> Field<'ast, Record<'ast>> {
             metadata: self.metadata,
             value: Some(value.into()),
             pos: TermPos::None,
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Default::default(),
         });
 
         self.state
@@ -470,6 +474,8 @@ mod tests {
                         value: node.map(Ast::from),
                         metadata,
                         pos: TermPos::None,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     }
                 })),
                 includes: &[],
@@ -669,6 +675,8 @@ mod tests {
                                                 metadata: Default::default(),
                                                 value: Some(Node::Null.into()),
                                                 pos: TermPos::None,
+                                                #[cfg(feature = "incremental-experimental")]
+                                                semantic_hash: Default::default(),
                                             },
                                             record::FieldDef {
                                                 path: FieldPathElem::single_ident_path(
@@ -678,6 +686,8 @@ mod tests {
                                                 metadata: Default::default(),
                                                 value: Some(Node::Null.into()),
                                                 pos: TermPos::None,
+                                                #[cfg(feature = "incremental-experimental")]
+                                                semantic_hash: Default::default(),
                                             },
                                         ]),
                                         ..Default::default()
@@ -685,6 +695,8 @@ mod tests {
                                     .into()
                             ),
                             pos: TermPos::None,
+                            #[cfg(feature = "incremental-experimental")]
+                            semantic_hash: Default::default(),
                         },
                         record::FieldDef {
                             path: alloc.alloc_many(vec![
@@ -695,6 +707,8 @@ mod tests {
                             metadata: Default::default(),
                             value: Some(alloc.string("hello world!").into()),
                             pos: TermPos::None,
+                            #[cfg(feature = "incremental-experimental")]
+                            semantic_hash: Default::default(),
                         }
                     ]),
                     ..Default::default()

@@ -1,5 +1,6 @@
 use super::{
     Annotation, Ast, AstAlloc, MergePriority, TraverseAlloc, TraverseControl, TraverseOrder,
+    semantic_hash::SemanticHash,
 };
 
 use crate::{
@@ -8,6 +9,8 @@ use crate::{
 };
 
 use indexmap::IndexMap;
+
+use std::cell::Cell;
 
 /// Element of a record field path in a record field definition. For example, in  `{ a."%{"hello-"
 /// ++ "world"}".c = true }`, the path `a."%{b}".c` is composed of three elements: an identifier
@@ -96,6 +99,8 @@ pub struct FieldDef<'ast> {
     pub value: Option<Ast<'ast>>,
     /// The position of the whole field definition.
     pub pos: TermPos,
+    #[cfg(feature = "incremental-experimental")]
+    pub semantic_hash: Cell<Option<SemanticHash>>,
 }
 
 impl FieldDef<'_> {
@@ -276,6 +281,9 @@ impl<'ast> TraverseAlloc<'ast, Ast<'ast>> for FieldDef<'ast> {
             metadata,
             value,
             pos: self.pos,
+            // Since we're potentially changing the AST, we invalidate the hash.
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Cell::new(None),
         })
     }
 

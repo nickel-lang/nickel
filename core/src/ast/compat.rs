@@ -90,6 +90,8 @@ impl<'ast> FromMainline<'ast, (LocIdent, term::record::Field)> for record::Field
                 .map(|term| term.to_ast(alloc, pos_table)),
             metadata: content.metadata.to_ast(alloc, pos_table),
             pos,
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Default::default(),
         }
     }
 }
@@ -258,6 +260,8 @@ impl<'ast> FromMainline<'ast, term::Term> for Node<'ast> {
                     pattern: Pattern::any(*id),
                     value: value.to_ast(alloc, pos_table),
                     metadata: Default::default(),
+                    #[cfg(feature = "incremental-experimental")]
+                    semantic_hash: Default::default(),
                 }),
                 data.body.to_ast(alloc, pos_table),
                 data.attrs.rec,
@@ -310,6 +314,8 @@ impl<'ast> FromMainline<'ast, term::Term> for Node<'ast> {
                             .map(|term| term.to_ast(alloc, pos_table)),
                         metadata: field.metadata.to_ast(alloc, pos_table),
                         pos,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     }
                 }));
 
@@ -332,6 +338,8 @@ impl<'ast> FromMainline<'ast, term::Term> for Node<'ast> {
                             .as_ref()
                             .map(|term| term.to_ast(alloc, pos_table)),
                         pos,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     }
                 }));
 
@@ -441,6 +449,8 @@ impl<'ast> FromMainline<'ast, NickelValue> for Ast<'ast> {
                             .map(|term| term.to_ast(alloc, pos_table)),
                         metadata: field.metadata.to_ast(alloc, pos_table),
                         pos,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     }
                 }));
 
@@ -1181,6 +1191,8 @@ impl<'ast> FromAst<Ast<'ast>> for NickelValue {
                              pattern,
                              metadata,
                              value,
+                             #[cfg(feature = "incremental-experimental")]
+                                 semantic_hash: _,
                          }| match pattern.data {
                             PatternData::Any(id) => {
                                 Some((id, with_metadata(pos_table, metadata, value)))
@@ -1206,6 +1218,8 @@ impl<'ast> FromAst<Ast<'ast>> for NickelValue {
                                  pattern,
                                  value,
                                  metadata,
+                                 #[cfg(feature = "incremental-experimental")]
+                                     semantic_hash: _,
                              }| {
                                 (pattern, with_metadata(pos_table, metadata, value))
                             },

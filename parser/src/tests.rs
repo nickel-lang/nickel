@@ -301,7 +301,9 @@ fn record_terms() {
                         path: alloc.alloc_many([FieldPathElem::Ident("a".into())]),
                         metadata: FieldMetadata::default(),
                         value: Some(mk_int(&alloc, 1)),
-                        pos: TermPos::None
+                        pos: TermPos::None,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     },
                     FieldDef {
                         path: alloc.alloc_many([FieldPathElem::Expr(
@@ -319,13 +321,17 @@ fn record_terms() {
                                 )
                                 .into()
                         ),
-                        pos: TermPos::None
+                        pos: TermPos::None,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     },
                     FieldDef {
                         path: alloc.alloc_many([FieldPathElem::Ident("d".into())]),
                         metadata: FieldMetadata::default(),
                         value: Some(mk_int(&alloc, 42)),
-                        pos: TermPos::None
+                        pos: TermPos::None,
+                        #[cfg(feature = "incremental-experimental")]
+                        semantic_hash: Default::default(),
                     },
                 ]),
                 open: false
