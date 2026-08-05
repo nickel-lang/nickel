@@ -4,7 +4,7 @@ use crate::{
     eval::value::{ArrayData, Container, EnumVariantData, NickelValue, ValueContentRef},
     identifier::{Ident, LocIdent},
     metrics,
-    term::{IndexMap, Number, TypeAnnotation, record::RecordData},
+    term::{record::RecordData, IndexMap, Number, TypeAnnotation},
 };
 
 use serde::{
@@ -120,9 +120,9 @@ where
 fn number_from_float<F: PrimitiveFloat, E: serde::de::Error>(float_value: F) -> Result<Number, E>
 where
     Number: TryFrom<
-            F,
-            Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
-        >,
+        F,
+        Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
+    >,
 {
     Number::try_from_float_simplest(float_value).map_err(|_| {
         E::custom(format!(
@@ -235,7 +235,7 @@ impl Serialize for NickelValue {
 macro_rules! def_number_visitor {
     ($($ty:ty),*) => {
         $(
-            paste::paste! {
+            pastey::paste! {
                 fn [<visit_ $ty>]<E>(self, v: $ty) -> Result<Self::Value, E>
                 where
                     E: serde::de::Error,
@@ -644,8 +644,8 @@ pub mod toml_deser {
     use codespan::ByteIndex;
     use malachite::{base::num::conversion::traits::ExactFrom as _, rational::Rational};
     use nickel_lang_parser::ast::{
-        Ast, AstAlloc, Node,
         record::{FieldDef, FieldMetadata, FieldPathElem},
+        Ast, AstAlloc, Node,
     };
     use std::ops::Range;
     use toml_edit::Value;
@@ -841,9 +841,9 @@ mod tests {
     use crate::{
         cache::CacheHub,
         error::NullReporter,
-        eval::{VirtualMachine, VmContext, cache::CacheImpl},
+        eval::{cache::CacheImpl, VirtualMachine, VmContext},
         program::{Program, ProgramBuilder},
-        term::{BinaryOp, make as mk_term},
+        term::{make as mk_term, BinaryOp},
     };
     use serde_json::json;
     use std::io::Cursor;
@@ -891,12 +891,10 @@ mod tests {
         value: NickelValue,
         expected: NickelValue,
     ) {
-        assert!(
-            VirtualMachine::<_, CacheImpl>::new_empty_env(vm_ctxt)
-                .eval(mk_term::op2(BinaryOp::Eq, value, expected))
-                .unwrap()
-                .phys_eq(&NickelValue::bool_true())
-        );
+        assert!(VirtualMachine::<_, CacheImpl>::new_empty_env(vm_ctxt)
+            .eval(mk_term::op2(BinaryOp::Eq, value, expected))
+            .unwrap()
+            .phys_eq(&NickelValue::bool_true()));
     }
 
     #[track_caller]
