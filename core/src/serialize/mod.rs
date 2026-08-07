@@ -4,7 +4,7 @@ use crate::{
     eval::value::{ArrayData, Container, EnumVariantData, NickelValue, ValueContentRef},
     identifier::{Ident, LocIdent},
     metrics,
-    term::{record::RecordData, IndexMap, Number, TypeAnnotation},
+    term::{IndexMap, Number, TypeAnnotation, record::RecordData},
 };
 
 use serde::{
@@ -120,9 +120,9 @@ where
 fn number_from_float<F: PrimitiveFloat, E: serde::de::Error>(float_value: F) -> Result<Number, E>
 where
     Number: TryFrom<
-        F,
-        Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
-    >,
+            F,
+            Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
+        >,
 {
     Number::try_from_float_simplest(float_value).map_err(|_| {
         E::custom(format!(
@@ -233,15 +233,13 @@ impl Serialize for NickelValue {
 // This macro generates boilerplate visitors for the various serde number types to be included in
 // the `NickelValue` deserialize implementation.
 macro_rules! def_number_visitor {
-    ($($ty:ty),*) => {
+    ($($visit_fn:ident => $ty:ty),*) => {
         $(
-            pastey::paste! {
-                fn [<visit_ $ty>]<E>(self, v: $ty) -> Result<Self::Value, E>
-                where
-                    E: serde::de::Error,
-                {
-                    Ok(NickelValue::number_posless(v))
-                }
+            fn $visit_fn<E>(self, v: $ty) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(NickelValue::number_posless(v))
             }
         )*
     };
@@ -268,7 +266,18 @@ impl<'de> Deserialize<'de> for NickelValue {
                 Ok(NickelValue::bool_value_posless(v))
             }
 
-            def_number_visitor!(i8, u8, i16, u16, i32, u32, i64, u64, i128, u128);
+            def_number_visitor!(
+                visit_i8 => i8,
+                visit_u8 => u8,
+                visit_i16 => i16,
+                visit_u16 => u16,
+                visit_i32 => i32,
+                visit_u32 => u32,
+                visit_i64 => i64,
+                visit_u64 => u64,
+                visit_i128 => i128,
+                visit_u128 => u128
+            );
 
             fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E>
             where
@@ -644,8 +653,8 @@ pub mod toml_deser {
     use codespan::ByteIndex;
     use malachite::{base::num::conversion::traits::ExactFrom as _, rational::Rational};
     use nickel_lang_parser::ast::{
-        record::{FieldDef, FieldMetadata, FieldPathElem},
         Ast, AstAlloc, Node,
+        record::{FieldDef, FieldMetadata, FieldPathElem},
     };
     use std::ops::Range;
     use toml_edit::Value;
@@ -841,9 +850,9 @@ mod tests {
     use crate::{
         cache::CacheHub,
         error::NullReporter,
-        eval::{cache::CacheImpl, VirtualMachine, VmContext},
+        eval::{VirtualMachine, VmContext, cache::CacheImpl},
         program::{Program, ProgramBuilder},
-        term::{make as mk_term, BinaryOp},
+        term::{BinaryOp, make as mk_term},
     };
     use serde_json::json;
     use std::io::Cursor;
@@ -891,10 +900,12 @@ mod tests {
         value: NickelValue,
         expected: NickelValue,
     ) {
-        assert!(VirtualMachine::<_, CacheImpl>::new_empty_env(vm_ctxt)
-            .eval(mk_term::op2(BinaryOp::Eq, value, expected))
-            .unwrap()
-            .phys_eq(&NickelValue::bool_true()));
+        assert!(
+            VirtualMachine::<_, CacheImpl>::new_empty_env(vm_ctxt)
+                .eval(mk_term::op2(BinaryOp::Eq, value, expected))
+                .unwrap()
+                .phys_eq(&NickelValue::bool_true())
+        );
     }
 
     #[track_caller]
