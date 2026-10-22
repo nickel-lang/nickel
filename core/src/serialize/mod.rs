@@ -13,10 +13,7 @@ use serde::{
     ser::{Serialize, SerializeMap, SerializeSeq, Serializer},
 };
 
-use malachite::base::{
-    num::conversion::traits::{IsInteger, RoundingFrom},
-    rounding_modes::RoundingMode,
-};
+use nickel_lang_parser::number::Float;
 use once_cell::sync::Lazy;
 
 use std::{fmt, io};
@@ -198,7 +195,7 @@ where
     S: Serializer,
 {
     if n.is_integer() {
-        if *n < 0 {
+        if *n < Number::zero() {
             if let Ok(n_as_integer) = i64::try_from(n) {
                 return n_as_integer.serialize(serializer);
             }
@@ -207,9 +204,27 @@ where
         }
     }
 
-    f64::rounding_from(n, RoundingMode::Nearest)
-        .0
-        .serialize(serializer)
+    n.to_f64().serialize(serializer)
+}
+
+/// Helper function to convert a serialized primitive float to a Nickel number.
+///
+/// Returns special non-number constants (enum tags) if the floating point value is either
+/// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
+fn deserialize_float<F: Float>(float_value: F) -> NickelValue {
+    Number::try_from_float_simplest(float_value)
+        .map(NickelValue::number_posless)
+        .unwrap_or_else(|_| {
+            let float_value: f64 = float_value.into();
+            if float_value.is_nan() {
+            not_a_number()
+        } else if float_value.is_infinite() && float_value.is_sign_negative() {
+            minus_inf()
+        } else if float_value.is_infinite() {
+            plus_inf()
+        } else {
+            unreachable!("conversion from float value {float_value} failed, but it was neither +inf, -inf nor NaN")
+        }})
 }
 
 /// Serializer for annotated values.
@@ -712,7 +727,10 @@ pub mod toml_deser {
         files::FileId,
         identifier::LocIdent,
         position::{PosTable, RawSpan, TermPos},
-        term::record::{RecordAttrs, RecordData},
+        term::{
+            Number,
+            record::{RecordAttrs, RecordData},
+        },
     };
     use codespan::ByteIndex;
     use nickel_lang_parser::ast::{

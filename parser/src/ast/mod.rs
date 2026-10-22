@@ -11,8 +11,6 @@
 
 use std::{cmp::Ordering, ffi::OsStr, fmt, path::Path};
 
-use malachite::base::num::basic::traits::Zero;
-
 use crate::{
     error::ParseError,
     identifier::{Ident, LocIdent},
@@ -38,7 +36,7 @@ use std::cell::Cell;
 /// 64-bits integer. If this succeeds, such operations don't lose precision. Otherwise, the number
 /// is converted to the nearest 64bit float and then serialized/printed, which can incur a loss of
 /// information.
-pub type Number = malachite::rational::Rational;
+pub use crate::number::Number;
 
 pub mod alloc;
 pub mod builder;
@@ -196,7 +194,7 @@ impl PartialEq for MergePriority {
             (MergePriority::Numeral(p1), MergePriority::Numeral(p2)) => p1 == p2,
             (MergePriority::Neutral, MergePriority::Numeral(p))
             | (MergePriority::Numeral(p), MergePriority::Neutral)
-                if p == &Number::ZERO =>
+                if p.is_zero() =>
             {
                 true
             }
@@ -221,8 +219,8 @@ impl Ord for MergePriority {
             (MergePriority::Top, _) | (_, MergePriority::Bottom) => Ordering::Greater,
 
             // Neutral and numeral.
-            (MergePriority::Neutral, MergePriority::Numeral(n)) => Number::ZERO.cmp(n),
-            (MergePriority::Numeral(n), MergePriority::Neutral) => n.cmp(&Number::ZERO),
+            (MergePriority::Neutral, MergePriority::Numeral(n)) => Number::zero().cmp(n),
+            (MergePriority::Numeral(n), MergePriority::Neutral) => n.cmp(&Number::zero()),
         }
     }
 }
@@ -231,7 +229,7 @@ impl fmt::Display for MergePriority {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MergePriority::Bottom => write!(f, "default"),
-            MergePriority::Neutral => write!(f, "{}", Number::ZERO),
+            MergePriority::Neutral => write!(f, "{}", Number::zero()),
             MergePriority::Numeral(p) => write!(f, "{p}"),
             MergePriority::Top => write!(f, "force"),
         }
