@@ -942,7 +942,7 @@ pub unsafe extern "C" fn nickel_number_as_f64(num: *const nickel_number) -> f64 
 /// The value of this number, as an exact rational number.
 ///
 /// - `out_numerator` must have been allocated with [`nickel_string_alloc`]. It
-///   will be overwritten with the numerator, as a decimal string.
+///   will be overwritten with the numerator, as a decimal string including the sign.
 /// - `out_denominator` must have been allocated with [`nickel_string_alloc`].
 ///   It will be overwritten with the denominator, as a decimal string.
 #[unsafe(no_mangle)]

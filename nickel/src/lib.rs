@@ -19,7 +19,10 @@ use std::{
 };
 
 use codespan_reporting::term::termcolor::{Ansi, NoColor, WriteColor};
-use malachite::base::{num::conversion::traits::RoundingFrom, rounding_modes::RoundingMode};
+use malachite::base::{
+    num::{arithmetic::traits::Sign, conversion::traits::RoundingFrom},
+    rounding_modes::RoundingMode,
+};
 
 use nickel_lang_core::{
     cache::{CacheHub, InputFormat, SourcePath},
@@ -728,12 +731,17 @@ impl Number<'_> {
 
     /// The exact value of this number, as a rational number.
     ///
-    /// Both the numerator and denominator are provided as decimal strings.
+    /// Both the numerator and denominator are provided as decimal strings; the numerator includes
+    /// the sign.
     pub fn as_rational(&self) -> (String, String) {
-        (
-            self.num.numerator_ref().to_string(),
-            self.num.denominator_ref().to_string(),
-        )
+        let numerator = self.num.numerator_ref().to_string();
+        let numerator = if self.num.sign().is_lt() {
+            format!("-{numerator}")
+        } else {
+            numerator
+        };
+
+        (numerator, self.num.denominator_ref().to_string())
     }
 }
 
@@ -861,5 +869,14 @@ mod tests {
         for elt in arr.iter() {
             assert!(ctxt.eval_expr_shallow(elt).is_err());
         }
+    }
+
+    #[test]
+    fn number_as_rational_preserves_negative_sign() {
+        let mut ctxt = Context::new();
+        let expr = ctxt.eval_deep("-1 / 2").unwrap();
+        let number = expr.as_number().unwrap();
+
+        assert_eq!(number.as_rational(), ("-1".to_owned(), "2".to_owned()));
     }
 }
