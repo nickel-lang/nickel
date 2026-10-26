@@ -120,25 +120,51 @@ jobs:
       - name: Build binaries
         run: |
           set +e
+          mkdir release
           nix build --log-format raw-with-logs .#nickel-lang
-          cp ./result/bin/nickel nickel-arm64-macos
-          cp ./result/bin/nls nls-arm64-macos
+          cp ./result/bin/nickel release/nickel-arm64-macos
+          cp ./result/bin/nls release/nls-arm64-macos
           nix build --log-format raw-with-logs .#nickel-lang-pkg
-          cp ./result/bin/nickel nickel-pkg-arm64-macos
+          cp ./result/bin/nickel release/nickel-pkg-arm64-macos
       - name: "Build static library"
         run: |
           nix build --log-format raw-with-logs .#nickel-lang-c
-          cp ./result/lib/libnickel_lang.a libnickel_lang-arm64-macos.a
-          cp ./result/lib/libnickel_lang.dylib libnickel_lang-arm64-macos.dylib
+          cp ./result/lib/libnickel_lang.a release/libnickel_lang-arm64-macos.a
+          cp ./result/lib/libnickel_lang.dylib release/libnickel_lang-arm64-macos.dylib
+      # Nix links libiconv by absolute store path. Point it at the
+      # system libiconv instead. Editing a binary invalidates its
+      # signature so re-sign afterwards.
+      - name: "Remove Nix store references in binaries/libraries"
+        run: |
+          binaries=./release/*-arm64-macos
+          libraries=./release/*-arm64-macos.dylib
+          for f in $binaries $libraries; do
+            chmod u+w "$f"
+            old=$(otool -L "$f" | awk 'NR>1 && /libiconv/ {print $1; exit}')
+            [ -n "$old" ] && install_name_tool -change "$old" /usr/lib/libiconv.2.dylib "$f"
+          done
+          for f in $libraries; do
+            name=$(basename "$f" -arm64-macos.dylib).dylib
+            install_name_tool -id "@rpath/$name" "$f"
+          done
+          for f in $binaries $libraries; do
+            codesign --force --sign - "$f"
+            if otool -L "$f" | tail -n +2 | grep /nix/; then
+              echo "::error::$f still references a Nix path"
+              exit 1
+            fi
+          done
+          for f in $binaries; do $f --version; done
       - name: "Upload binaries/libraries as release assets"
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.release_tag }}
         run: |
-          gh release upload --clobber $RELEASE_TAG nickel-arm64-macos
-          gh release upload --clobber $RELEASE_TAG nls-arm64-macos
-          gh release upload --clobber $RELEASE_TAG libnickel_lang-arm64-macos.a
-          gh release upload --clobber $RELEASE_TAG libnickel_lang-arm64-macos.dylib
+          gh release upload --clobber $RELEASE_TAG release/nickel-arm64-macos
+          gh release upload --clobber $RELEASE_TAG release/nls-arm64-macos
+          gh release upload --clobber $RELEASE_TAG release/nickel-pkg-arm64-macos
+          gh release upload --clobber $RELEASE_TAG release/libnickel_lang-arm64-macos.a
+          gh release upload --clobber $RELEASE_TAG release/libnickel_lang-arm64-macos.dylib
 
   release-artifacts-windows:
     name: "Build Windows Nickel binaries"
