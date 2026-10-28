@@ -1,6 +1,5 @@
 use super::{
     Annotation, Ast, AstAlloc, MergePriority, TraverseAlloc, TraverseControl, TraverseOrder,
-    semantic_hash::SemanticHash,
 };
 
 use crate::{
@@ -10,6 +9,9 @@ use crate::{
 
 use indexmap::IndexMap;
 
+#[cfg(feature = "incremental-experimental")]
+use super::semantic_hash::SemanticHash;
+#[cfg(feature = "incremental-experimental")]
 use std::cell::Cell;
 
 /// Element of a record field path in a record field definition. For example, in  `{ a."%{"hello-"

@@ -171,8 +171,10 @@ fn shallow_semantic_hash<H: Hasher>(
 ) -> Result<(), ComplexValueError> {
     // If we don't have a cross-evaluation unique identifier, we still try to structurally
     // hash simple constants, that don't involve other expressions.
-    value.tag().hash(hasher);
 
+    // We hash the tag of the value block at the end, such that if `value` is not a simple
+    // expression (we return `ComplexValueError`), we don't pay the price of hashing. We do the same
+    // (hash the tag last) for an enum variant.
     match value.content_ref() {
         ValueContentRef::Null => 0u8.hash(hasher),
         ValueContentRef::Bool(b) => b.hash(hasher),
@@ -180,8 +182,7 @@ fn shallow_semantic_hash<H: Hasher>(
         ValueContentRef::String(s) => s.hash(hasher),
         ValueContentRef::EnumVariant(EnumVariantData { tag, arg }) => {
             // We also compute a hash for a (nested) enum with constants inside, which is rather
-            // common. We start with the argument to avoid hashing the `tag` if the argument is not
-            // a simple value.
+            // common.
             if let Some(arg) = arg {
                 shallow_semantic_hash(arg, hasher)?;
             }
@@ -193,6 +194,8 @@ fn shallow_semantic_hash<H: Hasher>(
         }
         _ => return Err(ComplexValueError),
     }
+
+    value.tag().hash(hasher);
 
     Ok(())
 }

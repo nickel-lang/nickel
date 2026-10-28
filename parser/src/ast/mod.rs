@@ -9,7 +9,7 @@
 //! The corresponding lifetime of all the nodes - and thus of the arena as well - is consistently
 //! called `'ast`.
 
-use std::{cell::Cell, cmp::Ordering, ffi::OsStr, fmt, path::Path};
+use std::{cmp::Ordering, ffi::OsStr, fmt, path::Path};
 
 use malachite::base::num::basic::traits::Zero;
 
@@ -20,6 +20,9 @@ use crate::{
     position::TermPos,
     traverse::*,
 };
+
+#[cfg(feature = "incremental-experimental")]
+use std::cell::Cell;
 
 /// The underlying type representing Nickel numbers. Currently, numbers are arbitrary precision
 /// rationals.
@@ -930,6 +933,7 @@ impl<'ast> TraverseAlloc<'ast, Ast<'ast>> for LetBinding<'ast> {
             pattern,
             metadata,
             value,
+            #[cfg(feature = "incremental-experimental")]
             semantic_hash: Cell::new(None),
         })
     }

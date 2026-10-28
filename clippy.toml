@@ -1,0 +1,3 @@
+# The hash and eq instances of AstPtr are based on the node's memory address, so
+# interior mutability doesn't matter
+ignore-interior-mutability = ["nls::term::AstPtr"]
