@@ -9,6 +9,11 @@ use crate::{
 
 use indexmap::IndexMap;
 
+#[cfg(feature = "incremental-experimental")]
+use super::semantic_hash::SemanticHash;
+#[cfg(feature = "incremental-experimental")]
+use std::cell::Cell;
+
 /// Element of a record field path in a record field definition. For example, in  `{ a."%{"hello-"
 /// ++ "world"}".c = true }`, the path `a."%{b}".c` is composed of three elements: an identifier
 /// `a`, an expression `"hello" ++ "world"`, and another identifier `c`.
@@ -96,6 +101,8 @@ pub struct FieldDef<'ast> {
     pub value: Option<Ast<'ast>>,
     /// The position of the whole field definition.
     pub pos: TermPos,
+    #[cfg(feature = "incremental-experimental")]
+    pub semantic_hash: Cell<Option<SemanticHash>>,
 }
 
 impl FieldDef<'_> {
@@ -276,6 +283,9 @@ impl<'ast> TraverseAlloc<'ast, Ast<'ast>> for FieldDef<'ast> {
             metadata,
             value,
             pos: self.pos,
+            // Since we're potentially changing the AST, we invalidate the hash.
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Cell::new(None),
         })
     }
 

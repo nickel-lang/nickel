@@ -53,11 +53,9 @@ use super::{
     },
 };
 
-use std::hash::{DefaultHasher, Hash, Hasher};
+pub use nickel_lang_parser::ast::semantic_hash::SemanticHash;
 
-/// A semantic hash for re-using previous computations in the incremental evaluation mode.
-#[derive(Copy, Debug, PartialEq, Eq, Clone, Hash)]
-pub struct SemanticHash(pub u64);
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 pub fn cui(_v: &NickelValue) -> SemanticHash {
     unimplemented!()
@@ -116,9 +114,9 @@ impl<C: Cache> Register<C> for Thunk {
 impl<C: Cache> Register<C> for RecordData {
     fn register(&self, cache: &mut C) {
         for field in self.fields.values() {
-            //TODO: we cache the pure value, but not the potential pending contracts applied to this
-            //value, which we probably want as well. It's not entirely clear how to do that given the
-            //current implementation (there's no associated thunk), so it's left for future work.
+            // TODO: we cache the pure value, but not the potential pending contracts applied to this
+            // value, which we probably want as well. It's not entirely clear how to do that given the
+            // current implementation (there's no associated thunk), so it's left for future work.
             if let Some(value) = &field.value {
                 value.register(cache)
             }
@@ -129,7 +127,7 @@ impl<C: Cache> Register<C> for RecordData {
 impl<C: Cache> Register<C> for ArrayData {
     fn register(&self, cache: &mut C) {
         for value in self.array.iter() {
-            //TODO: as for records, we should try to cache the value with pending contracts appied.
+            //TODO: as for records, we should try to cache the value with pending contracts applied.
             value.register(cache)
         }
     }
@@ -156,21 +154,48 @@ pub fn semantic_hash(closure: &Closure, cui: Option<SemanticHash>) -> Option<Sem
     } else {
         // If we don't have a cross-evaluation unique identifier, we still try to structurally
         // hash simple constants, that don't involve other expressions.
-        closure.value.tag().hash(&mut hasher);
-
-        match closure.value.content_ref() {
-            ValueContentRef::Null => 0.hash(&mut hasher),
-            ValueContentRef::Bool(b) => b.hash(&mut hasher),
-            ValueContentRef::Number(n) => n.hash(&mut hasher),
-            ValueContentRef::String(s) => s.hash(&mut hasher),
-            ValueContentRef::EnumVariant(EnumVariantData { tag, arg: None }) => {
-                tag.hash(&mut hasher)
-            }
-            ValueContentRef::Array(Container::Empty)
-            | ValueContentRef::Record(Container::Empty) => 0.hash(&mut hasher),
-            _ => return None,
-        }
+        shallow_semantic_hash(&closure.value, &mut hasher).ok()?;
     }
 
-    Some(SemanticHash(hasher.finish()))
+    // TODO: use a hasher that can output 128 bits
+    Some(SemanticHash::from_hash(hasher.finish().into()))
+}
+
+struct ComplexValueError;
+
+/// Compute a fast hash for simple values (mostly constants) with a given hasher, or return `Err` if
+/// the value is more complex.
+fn shallow_semantic_hash<H: Hasher>(
+    value: &NickelValue,
+    hasher: &mut H,
+) -> Result<(), ComplexValueError> {
+    // If we don't have a cross-evaluation unique identifier, we still try to structurally
+    // hash simple constants, that don't involve other expressions.
+
+    // We hash the tag of the value block at the end, such that if `value` is not a simple
+    // expression (we return `ComplexValueError`), we don't pay the price of hashing. We do the same
+    // (hash the tag last) for an enum variant.
+    match value.content_ref() {
+        ValueContentRef::Null => 0u8.hash(hasher),
+        ValueContentRef::Bool(b) => b.hash(hasher),
+        ValueContentRef::Number(n) => n.hash(hasher),
+        ValueContentRef::String(s) => s.hash(hasher),
+        ValueContentRef::EnumVariant(EnumVariantData { tag, arg }) => {
+            // We also compute a hash for a (nested) enum with constants inside, which is rather
+            // common.
+            if let Some(arg) = arg {
+                shallow_semantic_hash(arg, hasher)?;
+            }
+
+            tag.hash(hasher);
+        }
+        ValueContentRef::Array(Container::Empty) | ValueContentRef::Record(Container::Empty) => {
+            0.hash(hasher)
+        }
+        _ => return Err(ComplexValueError),
+    }
+
+    value.tag().hash(hasher);
+
+    Ok(())
 }

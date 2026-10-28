@@ -271,7 +271,13 @@ pub ExtendedTerm: ExtendedTerm<Ast<'ast>> = {
 
 LetBinding: LetBinding<'ast> = {
     <pattern: Pattern> <metadata: LetAnnot<FixedType>?> "=" <value: Term> => {
-        LetBinding { pattern, metadata: metadata.unwrap_or_default(), value }
+        LetBinding {
+            pattern,
+            metadata: metadata.unwrap_or_default(),
+            value,
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Default::default(),
+        }
     }
 }
 
@@ -563,14 +569,18 @@ FieldDef: FieldDef<'ast> = {
             metadata: ann.unwrap_or_default(),
             value,
             pos: TermPos::Original(mk_span(src_id, l, r)),
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Default::default(),
         }
     },
     <err: Error> => {
         FieldDef {
-          pos: err.pos,
-          path: alloc.alloc_singleton(FieldPathElem::Expr(err.clone())),
-          metadata: Default::default(),
-          value: None,
+            pos: err.pos,
+            path: alloc.alloc_singleton(FieldPathElem::Expr(err.clone())),
+            metadata: Default::default(),
+            value: None,
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Default::default(),
         }
     },
 };

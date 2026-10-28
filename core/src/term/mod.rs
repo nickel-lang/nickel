@@ -429,7 +429,6 @@ impl Traverse<NickelValue> for RuntimeContract {
 pub struct LetAttrs {
     /// The type of a let binding. See the documentation of [`BindingType`].
     pub binding_type: BindingType,
-
     /// A recursive let binding adds its binding to the environment of the expression.
     pub rec: bool,
 }

@@ -21,6 +21,9 @@ use crate::{
     traverse::*,
 };
 
+#[cfg(feature = "incremental-experimental")]
+use std::cell::Cell;
+
 /// The underlying type representing Nickel numbers. Currently, numbers are arbitrary precision
 /// rationals.
 ///
@@ -44,6 +47,8 @@ pub mod pattern;
 pub mod pretty;
 pub mod primop;
 pub mod record;
+#[cfg(feature = "incremental-experimental")]
+pub mod semantic_hash;
 pub mod typ;
 
 pub use alloc::AstAlloc;
@@ -387,6 +392,8 @@ pub struct LetBinding<'ast> {
     pub pattern: Pattern<'ast>,
     pub metadata: LetMetadata<'ast>,
     pub value: Ast<'ast>,
+    #[cfg(feature = "incremental-experimental")]
+    pub semantic_hash: Cell<Option<semantic_hash::SemanticHash>>,
 }
 
 /// The metadata that can be attached to a let. It's a subset of [record::FieldMetadata].
@@ -444,7 +451,6 @@ impl<'ast> Node<'ast> {
 }
 
 /// A Nickel AST. Contains a root node and a span.
-///
 //TODO: we don't expect to access the span much on the happy path. Should we add an indirection
 //through a reference?
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -927,6 +933,8 @@ impl<'ast> TraverseAlloc<'ast, Ast<'ast>> for LetBinding<'ast> {
             pattern,
             metadata,
             value,
+            #[cfg(feature = "incremental-experimental")]
+            semantic_hash: Cell::new(None),
         })
     }
 

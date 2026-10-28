@@ -843,6 +843,8 @@ pub mod toml_deser {
                     metadata: FieldMetadata::default(),
                     value: Some(val.to_ast(alloc, file_id)),
                     pos: TermPos::default(),
+                    #[cfg(feature = "incremental-experimental")]
+                    semantic_hash: Default::default(),
                 })
                 .collect::<Vec<_>>(),
                 false,
