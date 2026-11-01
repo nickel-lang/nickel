@@ -4198,6 +4198,10 @@
         `f` returns true. The function `f` is passed the name and value of each field
         to make a decision.
 
+        Like `std.record.remove`, `filter` freezes the record first (see
+        `std.record.freeze`). The remaining fields keep their metadata, such as
+        documentation and priority.
+
         # Examples
 
         ```nickel
@@ -4206,10 +4210,16 @@
         ```
       "%
       = fun f record =>
-        record
-        |> to_array
-        |> std.array.filter (fun { field, value } => f field value)
-        |> from_array,
+        let record = %record/freeze% record in
+        %record/fields_with_opts% record
+        |> std.array.fold_left
+          (fun acc field =>
+            if %record/field_is_defined% field record && f field record."%{field}" then
+              acc
+            else
+              %record/remove_with_opts% field acc
+          )
+          record,
 
     apply_on
       : forall a b. String -> (a -> a -> b) -> { _ : a } -> { _ : a } -> b
