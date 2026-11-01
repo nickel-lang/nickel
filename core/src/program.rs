@@ -1037,6 +1037,7 @@ pub struct ProgramBuilder<R = NullReporter, W = io::Sink> {
     contracts: Vec<ProgramContract>,
     contract_paths: Vec<OsString>,
     import_paths: Vec<PathBuf>,
+    virtual_files: Vec<(OsString, String, InputFormat)>,
     package_map: Option<PackageMap>,
     extra_env: Vec<(Ident, NickelValue)>,
     #[cfg(feature = "incremental-experimental")]
@@ -1062,6 +1063,7 @@ impl ProgramBuilder {
             contracts: Vec::new(),
             contract_paths: Vec::new(),
             import_paths: Vec::new(),
+            virtual_files: Vec::new(),
             package_map: None,
             extra_env: Vec::new(),
             #[cfg(feature = "incremental-experimental")]
@@ -1161,6 +1163,25 @@ impl<R, W> ProgramBuilder<R, W> {
         self
     }
 
+    /// Registers `content` as a virtual file importable as `name`, which will be automatically
+    /// prefixed with [crate::cache::VIRTUAL_PATH_PREFIX] and is treated as an opaque identifier,
+    /// never as a path.
+    pub fn add_virtual_file(
+        mut self,
+        content: impl Into<String>,
+        name: impl Into<OsString>,
+        format: InputFormat,
+    ) -> Self {
+        let mut virtual_path = OsString::new();
+        // See https://github.com/tweag/nickel/issues/2362 and the documentation of
+        // VIRTUAL_PATH_PREFIX
+        virtual_path.push(VIRTUAL_PATH_PREFIX);
+        virtual_path.push(name.into());
+        self.virtual_files
+            .push((virtual_path, content.into(), format));
+        self
+    }
+
     /// Set the field path the program will operate on.
     pub fn with_field_path(mut self, field: FieldPath) -> Self {
         self.field = field;
@@ -1185,6 +1206,7 @@ impl<R, W> ProgramBuilder<R, W> {
             contracts: self.contracts,
             contract_paths: self.contract_paths,
             import_paths: self.import_paths,
+            virtual_files: self.virtual_files,
             package_map: self.package_map,
             extra_env: self.extra_env,
             #[cfg(feature = "incremental-experimental")]
@@ -1206,6 +1228,7 @@ impl<R, W> ProgramBuilder<R, W> {
             contracts: self.contracts,
             contract_paths: self.contract_paths,
             import_paths: self.import_paths,
+            virtual_files: self.virtual_files,
             package_map: self.package_map,
             extra_env: self.extra_env,
             #[cfg(feature = "incremental-experimental")]
@@ -1264,6 +1287,7 @@ where
             mut contracts,
             contract_paths,
             import_paths,
+            virtual_files,
             package_map,
             extra_env,
             #[cfg(feature = "incremental-experimental")]
@@ -1277,6 +1301,10 @@ where
         }
 
         let mut cache = CacheHub::new();
+
+        for (name, content, format) in virtual_files {
+            cache.sources.add_virtual_file(name, format, content);
+        }
 
         let main_id = if inputs.len() == 1 {
             // Single-input fast path: register it directly and use its file id as the main id.
@@ -1391,25 +1419,29 @@ fn register_input_as_import(
             })))
         }
         BuilderInput::Source {
-            source,
+            mut source,
             name,
             format,
         } => {
-            let mut import_path = OsString::new();
-            // See https://github.com/tweag/nickel/issues/2362 and the documentation of
-            // IN_MEMORY_SOURCE_PATH_PREFIX
-            import_path.push(IN_MEMORY_SOURCE_PATH_PREFIX);
-            import_path.push(&name);
+            // An in-memory input is registered as a virtual file and imported by that same
+            // name, so the registration key and the import agree verbatim.
+            let mut virtual_name = OsString::from(crate::cache::VIRTUAL_PATH_PREFIX);
+            virtual_name.push(&name);
 
-            cache
-                .sources
-                .add_source(SourcePath::Path(name.clone().into(), format), source)
+            let mut buffer = String::new();
+            source
+                .read_to_string(&mut buffer)
                 .map_err(|err| BuilderError::Io {
                     path: Some(name.into()),
                     error: err,
                 })?;
+
+            cache
+                .sources
+                .add_virtual_file(virtual_name.clone(), format, buffer);
+
             Ok(NickelValue::from(Term::Import(Import::Path {
-                path: import_path,
+                path: virtual_name,
                 format,
             })))
         }
