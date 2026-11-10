@@ -37,6 +37,18 @@ pub fn test_query_metadata_basic() {
 }
 
 #[test]
+pub fn test_query_metadata_after_record_filter() {
+    let result = program_from(
+        "{ r = std.record.filter (fun name _ => name != \"zone\") { zone = 1, val | doc \"kept\" = 2 } }",
+    )
+    .with_field_path("r.val")
+    .query()
+    .unwrap();
+
+    assert_eq!(result.metadata.doc(), Some("kept"));
+}
+
+#[test]
 pub fn test_query_with_wildcard() {
     let path = "value";
 
