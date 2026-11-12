@@ -1845,7 +1845,6 @@
 
           This behavior is also observed when manipulating the label directly
           and using `std.contract.blame` instead of returning an error value.
-          ```
         "%
       = fun contract label value =>
         %contract/apply% contract (%label/push_diag% label) value,
@@ -1990,7 +1989,6 @@
           with a delayed part. The only contracts for which `all_of` is
           overstrict are function contracts. In general, you shouldn't use
           function contracts with contract combinators.
-          ```
         "%
       = std.contract.Sequence,
 
@@ -2368,7 +2366,8 @@
 
         ("tag" | std.enum.Enum)
         # => error
-        "%
+        ```
+      "%
       =
         %contract/custom% (fun _label value =>
           if std.is_enum value then
@@ -3855,6 +3854,7 @@
         ({ one = 1 } | {one, two_opt | optional })
         |> std.record.has_field_with_opts "two_opt"
         # => true
+        ```
       "%
       = fun field r => %record/has_field_with_opts% field r,
 
