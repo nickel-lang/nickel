@@ -13,7 +13,7 @@ use serde::{
     ser::{Serialize, SerializeMap, SerializeSeq, Serializer},
 };
 
-use nickel_lang_parser::number::Float;
+use nickel_lang_parser::number::ToNumberSimplest;
 use once_cell::sync::Lazy;
 
 use std::{fmt, io};
@@ -211,7 +211,7 @@ where
 ///
 /// Returns special non-number constants (enum tags) if the floating point value is either
 /// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
-fn deserialize_float<F: Float>(float_value: F) -> NickelValue {
+fn deserialize_float<F: ToNumberSimplest>(float_value: F) -> NickelValue {
     Number::try_from_float_simplest(float_value)
         .map(NickelValue::number_posless)
         .unwrap_or_else(|_| {
