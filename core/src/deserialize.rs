@@ -43,7 +43,7 @@ macro_rules! deserialize_number {
 macro_rules! round_saturating {
     ($type:ty) => {
         |n: &Number| {
-            let n = n.round_ties_even();
+            let n = n.round();
             <$type>::try_from(&n).unwrap_or(if n < Number::zero() {
                 <$type>::MIN
             } else {

@@ -48,14 +48,17 @@ impl fmt::Display for TryFromFloatError {
 impl std::error::Error for TryFromFloatError {}
 
 impl Number {
+    #[inline]
     pub fn zero() -> Self {
         Number::from(0)
     }
 
+    #[inline]
     pub fn is_zero(&self) -> bool {
         self.0.is_zero()
     }
 
+    #[inline]
     pub fn is_integer(&self) -> bool {
         self.0.is_int()
     }
@@ -65,36 +68,31 @@ impl Number {
     /// # Panics
     ///
     /// Panics if `self` is zero and `exp` is negative.
-    pub fn pow(&self, exp: i64) -> Self {
-        match isize::try_from(exp) {
-            Ok(exp) => Number(self.0.pow(exp)),
-            Err(_) => Number(self.pow(exp / 2).0.pow(2) * self.0.pow((exp % 2) as isize)),
-        }
+    pub fn pow(&self, exp: isize) -> Self {
+        Number(self.0.pow(exp))
     }
 
     /// Rounds toward zero to an integer.
+    #[inline]
     pub fn trunc(&self) -> Self {
         Number(self.0.trunc().into())
     }
 
-    /// Rounds to the nearest integer. A number halfway between two integers rounds to the even one.
-    pub fn round_ties_even(&self) -> Self {
-        let trunc = self.0.trunc();
-        let is_tie = *self.0.denominator() == UBig::from(2u8);
-        if is_tie && (&trunc % IBig::from(2)).is_zero() {
-            Number(trunc.into())
-        } else {
-            Number(self.0.round().into())
-        }
+    /// Rounds to the nearest integer. A number halfway between two integers rounds to the one
+    /// farther from zero.
+    pub fn round(&self) -> Self {
+        Number(self.0.round().into())
     }
 
     /// Rounds to the nearest `f64`, ties to even. A number beyond the range of `f64` gives an
     /// infinity, and a negative number that rounds to zero gives `-0.0`.
+    #[inline]
     pub fn to_f64(&self) -> f64 {
         self.0.to_f64().value()
     }
 
     /// Rounds to the nearest `f32`, with the same rules as [Self::to_f64].
+    #[inline]
     pub fn to_f32(&self) -> f32 {
         self.0.to_f32().value()
     }
@@ -102,6 +100,7 @@ impl Number {
     /// Displays the number in decimal, rounded to 16 significant digits (ties to even) and without
     /// trailing zeros. The exponent notation, as in `1.5e20`, is used when the rounded number is at
     /// least `1e16` or below `1e-5` in absolute value.
+    #[inline]
     pub fn to_sci(&self) -> impl fmt::Display + '_ {
         Sci(&self.0)
     }
@@ -117,9 +116,6 @@ impl Number {
 
     /// Parses an integer written in base `radix`, which must be between 2 and 36.
     pub fn from_str_radix(s: &str, radix: u8) -> Option<Self> {
-        if s.contains('_') {
-            return None;
-        }
         IBig::from_str_radix(s, u32::from(radix))
             .ok()
             .map(|n| Number(RBig::from(n)))
@@ -128,34 +124,37 @@ impl Number {
     /// Converts a float to the rational with the smallest denominator that rounds to this float.
     /// For example, `0.1` gives `1/10` and not the exact value of the float. Fails on NaN and
     /// infinities.
-    pub fn try_from_float_simplest<F: Float>(x: F) -> Result<Self, TryFromFloatError> {
+    #[inline]
+    pub fn try_from_float_simplest<F: ToNumberSimplest>(x: F) -> Result<Self, TryFromFloatError> {
         x.to_number_simplest().ok_or(TryFromFloatError)
     }
 
     /// The absolute value of the numerator, in lowest terms.
+    #[inline]
     pub fn abs_numerator(&self) -> impl fmt::Display + '_ {
         self.0.numerator().unsigned_abs()
     }
 
     /// The denominator, in lowest terms. It is always positive.
+    #[inline]
     pub fn denominator(&self) -> impl fmt::Display + '_ {
         self.0.denominator()
     }
 }
 
 /// The primitive floats that convert to [Number] with [Number::try_from_float_simplest].
-pub trait Float: Copy + Into<f64> {
+pub trait ToNumberSimplest: Copy + Into<f64> {
     #[doc(hidden)]
     fn to_number_simplest(self) -> Option<Number>;
 }
 
-impl Float for f32 {
+impl ToNumberSimplest for f32 {
     fn to_number_simplest(self) -> Option<Number> {
         RBig::simplest_from_f32(self).map(Number)
     }
 }
 
-impl Float for f64 {
+impl ToNumberSimplest for f64 {
     fn to_number_simplest(self) -> Option<Number> {
         RBig::simplest_from_f64(self).map(Number)
     }
@@ -224,6 +223,8 @@ fn floor_log10(n: &UBig, d: &UBig) -> isize {
     estimate - isize::from(below)
 }
 
+/// A wrapper around a rational number that implements [fmt::Display] and format the numbers in the
+/// scientific notation when it outside a range of reasonably small numbers.
 struct Sci<'a>(&'a RBig);
 
 impl fmt::Display for Sci<'_> {
@@ -231,29 +232,32 @@ impl fmt::Display for Sci<'_> {
         if self.0.is_zero() {
             return f.write_str("0");
         }
+
         if self.0.is_negative() {
             f.write_str("-")?;
         }
+
         let abs = self.0.clone().abs();
         let log = floor_log10(&abs.numerator().unsigned_abs(), abs.denominator());
         let scale = SCI_PRECISION - 1 - log;
-        let significand = Number(abs * RBig::from(10).pow(scale))
-            .round_ties_even()
-            .to_string();
+        let significand = (abs * RBig::from(10).pow(scale)).round().to_string();
+
         let digits = significand.trim_end_matches('0');
         let exponent = (significand.len() - digits.len()) as isize - scale;
         let log = exponent + digits.len() as isize - 1;
+
+        // Outside the "small" numbers interval: full scientific notation
         if log <= SCI_NEG_EXP_THRESHOLD || log >= SCI_PRECISION {
             let (first, rest) = digits.split_at(1);
             let point = if rest.is_empty() { "" } else { "." };
             write!(f, "{first}{point}{rest}e{log}")
         } else if exponent >= 0 {
-            write!(f, "{digits}{}", "0".repeat(exponent as usize))
+            write!(f, "{digits}{:0<w$}", "", w = exponent as usize)
         } else if log >= 0 {
             let (int, fract) = digits.split_at(log as usize + 1);
             write!(f, "{int}.{fract}")
         } else {
-            write!(f, "0.{}{digits}", "0".repeat((-log - 1) as usize))
+            write!(f, "0.{:0<w$}{digits}", "", w = (-log - 1) as usize)
         }
     }
 }

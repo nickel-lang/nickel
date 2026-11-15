@@ -58,8 +58,6 @@ fn parse_radix() {
     );
     assert_eq!(Number::from_str_radix("2", 2), None);
     assert_eq!(Number::from_str_radix("", 16), None);
-    assert_eq!(Number::from_str_radix("1_0", 16), None);
-    assert_eq!(Number::from_str_radix("_1", 16), None);
 }
 
 #[test]
@@ -77,7 +75,7 @@ fn sci() {
         ("12345678901234567890", "1.234567890123457e19"),
         ("1234567890123456", "1234567890123456"),
         ("12345678901234567", "1.234567890123457e16"),
-        ("1.0000000000000005", "1"),
+        ("1.0000000000000005", "1.000000000000001"),
         ("1.0000000000000015", "1.000000000000002"),
         ("9.9999999999999995", "10"),
         ("123456789012345675", "1.234567890123457e17"),
@@ -139,11 +137,11 @@ fn pow() {
 #[test]
 fn rounding() {
     for (numerator, denominator, trunc, round) in [
-        (1, 2, 0, 0),
-        (-1, 2, 0, 0),
-        (5, 2, 2, 2),
+        (1, 2, 0, 1),
+        (-1, 2, 0, -1),
+        (5, 2, 2, 3),
         (7, 2, 3, 4),
-        (-5, 2, -2, -2),
+        (-5, 2, -2, -3),
         (-7, 2, -3, -4),
         (1, 3, 0, 0),
         (-1, 3, 0, 0),
@@ -152,7 +150,7 @@ fn rounding() {
     ] {
         let n = ratio(numerator, denominator);
         assert_eq!(n.trunc(), Number::from(trunc), "trunc {n}");
-        assert_eq!(n.round_ties_even(), Number::from(round), "round {n}");
+        assert_eq!(n.round(), Number::from(round), "round {n}");
     }
 }
 

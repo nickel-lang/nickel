@@ -2956,9 +2956,8 @@
         # Precision
 
         Nickel numbers are arbitrary precision rationals. If the exponent `y` is
-        an integer which fits into a 64-bit signed or unsigned integer (that is, if
-        `y` is an integer between `−2^63` and `2^64-1`), the result is computed
-        exactly.
+        an integer which fits into a 64 bit signed integer (or 32 bit for 32 bit
+        platforms), the result is computed exactly.
 
         Otherwise, both operands `x` and `y` are converted to the nearest 64 bit
         float (excluding `NaN` and infinity) and the result is computed as a 64 bit
