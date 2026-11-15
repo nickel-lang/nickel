@@ -125,7 +125,7 @@ impl Number {
     /// For example, `0.1` gives `1/10` and not the exact value of the float. Fails on NaN and
     /// infinities.
     #[inline]
-    pub fn try_from_float_simplest<F: ToNumberSimplest>(x: F) -> Result<Self, TryFromFloatError> {
+    pub fn try_from_float_simplest<F: PrimitiveFloat>(x: F) -> Result<Self, TryFromFloatError> {
         x.to_number_simplest().ok_or(TryFromFloatError)
     }
 
@@ -142,28 +142,72 @@ impl Number {
     }
 }
 
-/// The primitive floats that convert to [Number] with [Number::try_from_float_simplest].
-pub trait ToNumberSimplest: Copy + Into<f64> {
-    #[doc(hidden)]
-    fn to_number_simplest(self) -> Option<Number>;
+impl std::str::FromStr for Number {
+    type Err = <IBig as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        RBig::from_str(s).map(Self)
+    }
 }
 
-impl ToNumberSimplest for f32 {
+/// The primitive floats that convert to [Number] with [Number::try_from_float_simplest].
+pub trait PrimitiveFloat: Copy + fmt::Display + Into<f64> {
+    #[doc(hidden)]
+    fn to_number_simplest(self) -> Option<Number>;
+    fn is_nan(self) -> bool;
+    fn is_infinite(self) -> bool;
+    fn is_sign_negative(self) -> bool;
+}
+
+impl PrimitiveFloat for f32 {
     fn to_number_simplest(self) -> Option<Number> {
         RBig::simplest_from_f32(self).map(Number)
     }
-}
 
-impl ToNumberSimplest for f64 {
-    fn to_number_simplest(self) -> Option<Number> {
-        RBig::simplest_from_f64(self).map(Number)
+    fn is_nan(self) -> bool {
+        f32::is_nan(self)
+    }
+
+    fn is_infinite(self) -> bool {
+        f32::is_infinite(self)
+    }
+
+    fn is_sign_negative(self) -> bool {
+        f32::is_sign_negative(self)
     }
 }
 
-/// Converts a float to the rational that it represents exactly. Fails on NaN and infinities.
+impl PrimitiveFloat for f64 {
+    fn to_number_simplest(self) -> Option<Number> {
+        RBig::simplest_from_f64(self).map(Number)
+    }
+
+    fn is_nan(self) -> bool {
+        f64::is_nan(self)
+    }
+
+    fn is_infinite(self) -> bool {
+        f64::is_infinite(self)
+    }
+
+    fn is_sign_negative(self) -> bool {
+        f64::is_sign_negative(self)
+    }
+}
+
+impl TryFrom<f32> for Number {
+    type Error = TryFromFloatError;
+
+    /// Converts a float to the rational that it represents exactly. Fails on NaN and infinities.
+    fn try_from(x: f32) -> Result<Self, Self::Error> {
+        RBig::try_from(x).map(Number).map_err(|_| TryFromFloatError)
+    }
+}
+
 impl TryFrom<f64> for Number {
     type Error = TryFromFloatError;
 
+    /// Converts a float to the rational that it represents exactly. Fails on NaN and infinities.
     fn try_from(x: f64) -> Result<Self, Self::Error> {
         RBig::try_from(x).map(Number).map_err(|_| TryFromFloatError)
     }

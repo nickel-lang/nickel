@@ -297,24 +297,22 @@ impl<'ast> Loader<'ast> {
         // `0o[0-7]+` or `0x[0-9a-fA-F]+`. Integers that don't fit in an `i64` are fine, since
         // Nickel numbers are arbitrary-precision.
         fn parse_int(v: &str) -> Option<Number> {
-            use malachite::{Natural, base::num::conversion::traits::FromStringBase};
-
-            fn natural(digits: &str, radix: u8) -> Option<Natural> {
+            fn natural(digits: &str, radix: u8) -> Option<Number> {
                 if !digits.is_empty() && digits.chars().all(|c| c.is_digit(radix.into())) {
-                    Natural::from_string_base(radix, digits)
+                    Number::from_str_radix(digits, radix)
                 } else {
                     None
                 }
             }
 
             if let Some(hex) = v.strip_prefix("0x") {
-                natural(hex, 16).map(Number::from)
+                natural(hex, 16)
             } else if let Some(oct) = v.strip_prefix("0o") {
-                natural(oct, 8).map(Number::from)
+                natural(oct, 8)
             } else if let Some(dec) = v.strip_prefix('-') {
-                natural(dec, 10).map(|n| -Number::from(n))
+                natural(dec, 10).map(|n| -n)
             } else {
-                natural(v.strip_prefix('+').unwrap_or(v), 10).map(Number::from)
+                natural(v.strip_prefix('+').unwrap_or(v), 10)
             }
         }
 
