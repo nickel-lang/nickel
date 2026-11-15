@@ -13,7 +13,6 @@ use serde::{
     ser::{Serialize, SerializeMap, SerializeSeq, Serializer},
 };
 
-use nickel_lang_parser::number::ToNumberSimplest;
 use once_cell::sync::Lazy;
 
 use std::{fmt, io};
@@ -84,16 +83,15 @@ impl fmt::Display for ParseFormatError {
 // Float deserialization, and in particular the handling of floats that are not representable as
 // Nickel number (NaN and infs)
 mod float {
-    use malachite::base::num::basic::floats::PrimitiveFloat;
-
     // Enum tags used for non-representable float values.
     const PLUS_INF_TAG: &str = "PlusInfinity";
     const MINUS_INF_TAG: &str = "MinusInfinity";
     const NOT_A_NUMBER_TAG: &str = "NotANumber";
 
     pub mod value {
-        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG, PrimitiveFloat};
+        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG};
         use crate::{eval::value::NickelValue, term::Number};
+        use nickel_lang_parser::number::{PrimitiveFloat, TryFromFloatError};
 
         /// The constant Nickel value we use to deserialize `inf`/`+inf` float values.
         pub fn plus_inf() -> NickelValue {
@@ -116,11 +114,8 @@ mod float {
         /// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
         pub fn deserialize_float<F: PrimitiveFloat>(f: F) -> NickelValue
         where
-            Number: TryFrom<
-                    F,
-                    Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
-                >,
-{
+            Number: TryFrom<F, Error = TryFromFloatError>,
+        {
             Number::try_from_float_simplest(f)
                 .map(NickelValue::number_posless)
                 .unwrap_or_else(|_| if f.is_nan() {
@@ -136,8 +131,9 @@ mod float {
     }
 
     pub(super) mod ast {
-        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG, PrimitiveFloat};
+        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG};
         use crate::ast::{AstAlloc, Node, Number};
+        use nickel_lang_parser::number::{PrimitiveFloat, TryFromFloatError};
 
         /// The constant Nickel value we use to deserialize `inf`/`+inf` float values.
         pub fn plus_inf(alloc: &AstAlloc) -> Node<'_> {
@@ -160,11 +156,8 @@ mod float {
         /// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
         pub fn deserialize_float<F: PrimitiveFloat>(alloc: &AstAlloc, f: F) -> Node<'_>
         where
-            Number: TryFrom<
-                    F,
-                    Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
-                >,
-{
+            Number: TryFrom<F, Error = TryFromFloatError>,
+        {
             Number::try_from_float_simplest(f)
                 .map(|n| alloc.number(n))
                 .unwrap_or_else(|_| if f.is_nan() {
@@ -205,26 +198,6 @@ where
     }
 
     n.to_f64().serialize(serializer)
-}
-
-/// Helper function to convert a serialized primitive float to a Nickel number.
-///
-/// Returns special non-number constants (enum tags) if the floating point value is either
-/// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
-fn deserialize_float<F: ToNumberSimplest>(float_value: F) -> NickelValue {
-    Number::try_from_float_simplest(float_value)
-        .map(NickelValue::number_posless)
-        .unwrap_or_else(|_| {
-            let float_value: f64 = float_value.into();
-            if float_value.is_nan() {
-            not_a_number()
-        } else if float_value.is_infinite() && float_value.is_sign_negative() {
-            minus_inf()
-        } else if float_value.is_infinite() {
-            plus_inf()
-        } else {
-            unreachable!("conversion from float value {float_value} failed, but it was neither +inf, -inf nor NaN")
-        }})
 }
 
 /// Serializer for annotated values.
@@ -727,10 +700,7 @@ pub mod toml_deser {
         files::FileId,
         identifier::LocIdent,
         position::{PosTable, RawSpan, TermPos},
-        term::{
-            Number,
-            record::{RecordAttrs, RecordData},
-        },
+        term::record::{RecordAttrs, RecordData},
     };
     use codespan::ByteIndex;
     use nickel_lang_parser::ast::{
