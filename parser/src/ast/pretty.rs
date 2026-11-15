@@ -156,7 +156,7 @@ pub fn enum_tag_quoted(ident: impl Into<Ident>) -> String {
 }
 
 /// Does a sequence of `StringChunk`s contain a literal newline?
-fn contains_newline<T>(chunks: &[StringChunk<T>]) -> bool {
+fn contains_newline<T>(chunks: &[StringChunk<T, &str>]) -> bool {
     chunks.iter().any(|chunk| match chunk {
         StringChunk::Literal(str) => str.contains('\n'),
         StringChunk::Expr(_, _) => false,
@@ -165,7 +165,7 @@ fn contains_newline<T>(chunks: &[StringChunk<T>]) -> bool {
 
 /// Does a sequence of `StringChunk`s contain a carriage return? Lone carriage
 /// returns are forbidden in Nickel's surface syntax.
-fn contains_carriage_return<T>(chunks: &[StringChunk<T>]) -> bool {
+fn contains_carriage_return<T>(chunks: &[StringChunk<T, &str>]) -> bool {
     chunks.iter().any(|chunk| match chunk {
         StringChunk::Literal(str) => str.contains('\r'),
         StringChunk::Expr(_, _) => false,
@@ -393,7 +393,7 @@ impl Allocator {
     /// Print string chunks, either in the single line or multiline style.
     fn chunks<'a>(
         &'a self,
-        chunks: &[StringChunk<Ast>],
+        chunks: &[StringChunk<Ast, &str>],
         string_style: StringRenderStyle,
     ) -> DocBuilder<'a, Self> {
         let multiline = string_style == StringRenderStyle::Multiline
@@ -486,10 +486,7 @@ impl Allocator {
                             self,
                             self.line(),
                             "| doc ",
-                            self.chunks(
-                                &[StringChunk::Literal(doc.to_owned())],
-                                StringRenderStyle::Multiline
-                            ),
+                            self.chunks(&[StringChunk::Literal(doc)], StringRenderStyle::Multiline),
                         ]
                     })
                     .unwrap_or_else(|| self.nil())

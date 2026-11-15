@@ -710,10 +710,10 @@ impl<'ast> FromAst<Annotation<'ast>> for term::TypeAnnotation {
     }
 }
 
-impl<'ast> FromAst<StringChunk<Ast<'ast>>> for term::StrChunk<NickelValue> {
-    fn from_ast(chunk: &StringChunk<Ast<'ast>>, pos_table: &mut PosTable) -> Self {
+impl<'ast> FromAst<StringChunk<Ast<'ast>, &'ast str>> for term::StrChunk<NickelValue> {
+    fn from_ast(chunk: &StringChunk<Ast<'ast>, &'ast str>, pos_table: &mut PosTable) -> Self {
         match chunk {
-            StringChunk::Literal(s) => term::StrChunk::Literal(s.clone()),
+            StringChunk::Literal(s) => term::StrChunk::Literal(s.to_string()),
             StringChunk::Expr(expr, indent) => {
                 term::StrChunk::Expr(expr.to_mainline(pos_table), *indent)
             }
@@ -1123,7 +1123,7 @@ impl<'ast> FromAst<Ast<'ast>> for NickelValue {
                     .iter()
                     .rev()
                     .map(|chunk| match chunk {
-                        StringChunk::Literal(s) => term::StrChunk::Literal(s.clone()),
+                        StringChunk::Literal(s) => term::StrChunk::Literal(s.to_string()),
                         StringChunk::Expr(expr, indent) => {
                             term::StrChunk::Expr(expr.to_mainline(pos_table), *indent)
                         }
