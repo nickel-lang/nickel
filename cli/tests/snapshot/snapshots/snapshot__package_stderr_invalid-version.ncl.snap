@@ -6,9 +6,9 @@ error: failed to evaluate package manifest
 
 error: contract broken by the value of `version`
        invalid semver
-     ┌─ <stdlib/std.ncl>:3610:17
+     ┌─ <stdlib/std.ncl>:3609:17
      │
-3610 │               | Semver
+3609 │               | Semver
      │                 ------ expected type
      │
      ┌─ [INPUTS_PATH]/package/invalid-version.ncl:6:13
