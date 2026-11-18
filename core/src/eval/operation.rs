@@ -1748,6 +1748,15 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 // the value to the nearest `f64`, perform the exponentiation, and convert
                 // the result back to rationals, with a possible loss of precision.
                 let result = if let Ok(n2_as_i64) = i64::try_from(n2) {
+                    // Raising zero to a negative power is a division by zero. Malachite
+                    // panics in that case, so we have to catch it before.
+                    if n1 == &Number::ZERO && n2_as_i64 < 0 {
+                        return Err(Box::new(EvalErrorKind::Other(
+                            String::from("division by zero"),
+                            pos_op,
+                        )));
+                    }
+
                     n1.pow(n2_as_i64)
                 } else {
                     let result_as_f64 = f64::rounding_from(n1, RoundingMode::Nearest)
