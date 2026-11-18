@@ -409,8 +409,30 @@ pub fn resolve_with_lock(
         snapshot,
     };
 
-    let deps = pubgrub::resolve(&registry, Package::Root, version)
-        .map_err(|e| Error::Resolution(Box::new(e)))?;
+    let deps = pubgrub::resolve(&registry, Package::Root, version).map_err(|error| {
+        // A dependency on an index package that doesn't exist shows up in the
+        // derivation tree as a package with no versions, which by itself is a
+        // confusing explanation. Point out explicitly which packages are missing.
+        let mut missing = Vec::new();
+        if let pubgrub::PubGrubError::NoSolution(tree) = &error {
+            for pkg in tree.packages() {
+                if let Package::Index(bucket) = pkg
+                    && registry
+                        .index
+                        .available_versions(&bucket.id)
+                        .is_ok_and(|mut vs| vs.next().is_none())
+                {
+                    missing.push(bucket.id.clone());
+                }
+            }
+        }
+        missing.sort();
+        missing.dedup();
+        Error::Resolution {
+            error: Box::new(error),
+            missing,
+        }
+    })?;
 
     let mut index_packages: HashMap<index::Id, Vec<SemVer>> = HashMap::new();
     for (pkg, version) in deps {

@@ -1,0 +1,7 @@
+---
+source: package/tests/integration.rs
+expression: e.to_string()
+---
+package version resolution failed:
+top-level package 0.1.0 depends on github:example/does-not-exist >=0.1.0
+package github:example/does-not-exist not found in the index
