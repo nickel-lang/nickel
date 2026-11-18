@@ -1553,7 +1553,7 @@ where
     }
 }
 
-impl<'ast, T> Walk<'ast> for &'ast StringChunk<T>
+impl<'ast, T> Walk<'ast> for &'ast StringChunk<T, &'ast str>
 where
     &'ast T: Walk<'ast>,
 {

@@ -125,10 +125,14 @@ impl std::str::FromStr for InputFormat {
 
 /// A chunk of a string with interpolated expressions inside. Can be either a string literal or an
 /// interpolated expression.
+///
+/// The type of the literal `S` defaults to an owned [String]. Arena-allocated chunks, as found in
+/// [Node::StringChunks], use an `&'ast str` instead: the arena doesn't run destructors, so an
+/// owned `String` would be leaked.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum StringChunk<E> {
+pub enum StringChunk<E, S = String> {
     /// A string literal.
-    Literal(String),
+    Literal(S),
 
     /// An interpolated expression.
     Expr(
@@ -144,17 +148,20 @@ impl<E> StringChunk<E> {
     pub fn expr(e: E) -> Self {
         StringChunk::Expr(e, 0)
     }
+}
 
+impl<E, S: AsRef<str>> StringChunk<E, S> {
     pub fn try_chunks_as_static_str<'a, I>(chunks: I) -> Option<String>
     where
-        I: IntoIterator<Item = &'a StringChunk<E>>,
+        I: IntoIterator<Item = &'a StringChunk<E, S>>,
         E: 'a,
+        S: 'a,
     {
         chunks
             .into_iter()
             .try_fold(String::new(), |mut acc, next| match next {
                 StringChunk::Literal(lit) => {
-                    acc.push_str(lit);
+                    acc.push_str(lit.as_ref());
                     Some(acc)
                 }
                 _ => None,
@@ -308,7 +315,7 @@ pub enum Node<'ast> {
     ///
     /// As opposed to `nickel_lang_core::term::Term::StrChunks`, the chunks are stored in the original order:
     /// `"hello%{var}"` will give `["hello", var]`.
-    StringChunks(&'ast [StringChunk<Ast<'ast>>]),
+    StringChunks(&'ast [StringChunk<Ast<'ast>, &'ast str>]),
 
     /// A function.
     Fun {
@@ -688,7 +695,7 @@ impl<'ast> TraverseAlloc<'ast, Ast<'ast>> for Ast<'ast> {
                 }
             }
             Node::StringChunks(chunks) => {
-                let chunks_res: Result<Vec<StringChunk<Ast<'ast>>>, E> = chunks
+                let chunks_res: Result<Vec<StringChunk<Ast<'ast>, &'ast str>>, E> = chunks
                     .iter()
                     .cloned()
                     .map(|chunk| match chunk {

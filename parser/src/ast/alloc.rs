@@ -14,7 +14,9 @@ pub trait Allocable {}
 
 impl Allocable for Ast<'_> {}
 impl Allocable for Node<'_> {}
-impl<T: Allocable> Allocable for StringChunk<T> {}
+// Only borrowed literals: the arena never runs destructors, so an owned
+// `String` literal would leak (#2705).
+impl<T: Allocable> Allocable for StringChunk<T, &str> {}
 impl Allocable for LetBinding<'_> {}
 impl Allocable for LetMetadata<'_> {}
 impl Allocable for PrimOp {}
@@ -158,7 +160,10 @@ impl AstAlloc {
         I: IntoIterator<Item = StringChunk<Ast<'ast>>>,
         I::IntoIter: ExactSizeIterator,
     {
-        Node::StringChunks(self.alloc_many(chunks))
+        Node::StringChunks(self.alloc_many(chunks.into_iter().map(|chunk| match chunk {
+            StringChunk::Literal(s) => StringChunk::Literal(self.alloc_str(&s)),
+            StringChunk::Expr(e, indent) => StringChunk::Expr(e, indent),
+        })))
     }
 
     pub fn fun<'ast, I>(&'ast self, args: I, body: Ast<'ast>) -> Node<'ast>
@@ -759,12 +764,12 @@ impl<Ty: CloneTo> CloneTo for typ::RecordRowF<Ty> {
     }
 }
 
-impl CloneTo for StringChunk<Ast<'_>> {
-    type Data<'ast> = StringChunk<Ast<'ast>>;
+impl CloneTo for StringChunk<Ast<'_>, &str> {
+    type Data<'ast> = StringChunk<Ast<'ast>, &'ast str>;
 
     fn clone_to<'to>(data: Self::Data<'_>, dest: &'to AstAlloc) -> Self::Data<'to> {
         match data {
-            StringChunk::Literal(s) => StringChunk::Literal(s),
+            StringChunk::Literal(s) => StringChunk::Literal(dest.alloc_str(s)),
             StringChunk::Expr(ast, indent) => StringChunk::Expr(Ast::clone_to(ast, dest), indent),
         }
     }
