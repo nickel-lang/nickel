@@ -240,6 +240,18 @@ pub enum EvalErrorKind {
         /// Additional error-reporting data.
         merge_label: MergeLabel,
     },
+    /// Attempted to merge two definitions of the same record field that carry different `doc`
+    /// annotations.
+    MergeIncompatibleDoc {
+        /// The field whose documentation conflicts.
+        field: LocIdent,
+        /// The documentation of the left operand.
+        left_doc: String,
+        /// The documentation of the right operand.
+        right_doc: String,
+        /// Additional error-reporting data.
+        merge_label: MergeLabel,
+    },
     /// An unbound identifier was referenced.
     UnboundIdentifier(LocIdent, TermPos),
     /// An element in the evaluation Cache was entered during its own update.
@@ -1282,6 +1294,39 @@ impl IntoDiagnostics for EvalErrorData {
                         .with_message("non mergeable terms")
                         .with_labels(labels)
                         .with_notes(notes),
+                ]
+            }
+            EvalErrorKind::MergeIncompatibleDoc {
+                field,
+                left_doc,
+                right_doc,
+                merge_label,
+            } => {
+                let mut labels = vec![
+                    primary_alt(field.pos.into_opt(), field.to_string(), files)
+                        .with_message("this field has two different documentations"),
+                ];
+
+                let span_label = match merge_label.kind {
+                    MergeKind::Standard => "originally merged here",
+                    MergeKind::PiecewiseDef => "when combining the definitions of this field",
+                };
+
+                if let Some(merge_label_span) = pos_table.get(merge_label.span).into_opt() {
+                    labels.push(secondary(&merge_label_span).with_message(span_label));
+                }
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("non mergeable documentation")
+                        .with_labels(labels)
+                        .with_notes(vec![
+                            format!("The documentation of the left operand is: {left_doc:?}"),
+                            format!("The documentation of the right operand is: {right_doc:?}"),
+                            "When two definitions of a field both have a `doc` annotation, \
+                            the two documentations must be equal"
+                                .to_owned(),
+                        ]),
                 ]
             }
             EvalErrorKind::UnboundIdentifier(ident, span_opt) => vec![
