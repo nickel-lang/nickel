@@ -270,14 +270,18 @@ impl TailPattern {
 }
 
 impl RecordPattern<'_> {
-    /// Check the matches for duplication, and raise an error if any occurs.
-    ///
-    /// Note that for backwards-compatibility reasons this function _only_
-    /// checks top-level matches. In Nickel 1.0, this code panicked:
+    /// Check the matches for duplication, and raise an error if any occurs. Both matching the same
+    /// field twice and binding the same variable twice are errors:
     ///
     /// ```text
     /// let f = fun { x, x, .. } => x in f { x = 1 }
+    /// let f = fun { x, y = x, .. } => x in f { x = 1, y = 2 }
     /// ```
+    ///
+    /// Note that for backwards-compatibility reasons this function _only_
+    /// checks top-level matches, and the variables they bind directly (through
+    /// a variable pattern, an alias or the captured rest). In Nickel 1.0, the
+    /// first example above panicked.
     ///
     /// However this "works", even though the binding to `y` is duplicated.
     ///
@@ -291,22 +295,37 @@ impl RecordPattern<'_> {
     /// This function aims to raise errors in the first case, but maintain the
     /// behaviour in the second case.
     pub fn check_dup(&self) -> Result<(), ParseError> {
-        let mut bindings = HashMap::new();
-
-        for pat in self.patterns.iter() {
-            let binding = pat.matched_id;
-            let label = binding.label().to_owned();
-            match bindings.entry(label) {
-                Entry::Occupied(occupied_entry) => {
-                    return Err(ParseError::DuplicateIdentInRecordPattern {
-                        ident: binding,
-                        prev_ident: occupied_entry.remove_entry().1,
-                    });
-                }
+        fn insert(seen: &mut HashMap<String, LocIdent>, ident: LocIdent) -> Result<(), ParseError> {
+            match seen.entry(ident.label().to_owned()) {
+                Entry::Occupied(occupied_entry) => Err(ParseError::DuplicateIdentInRecordPattern {
+                    ident,
+                    prev_ident: occupied_entry.remove_entry().1,
+                }),
                 Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(binding);
+                    vacant_entry.insert(ident);
+                    Ok(())
                 }
             }
+        }
+
+        let mut fields = HashMap::new();
+        let mut vars = HashMap::new();
+
+        for pat in self.patterns.iter() {
+            insert(&mut fields, pat.matched_id)?;
+
+            for var in pat
+                .pattern
+                .alias
+                .into_iter()
+                .chain(pat.pattern.try_as_any())
+            {
+                insert(&mut vars, var)?;
+            }
+        }
+
+        if let TailPattern::Capture(rest) = self.tail {
+            insert(&mut vars, rest)?;
         }
 
         Ok(())
