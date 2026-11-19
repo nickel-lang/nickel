@@ -15,7 +15,8 @@
 //!
 //! As fields are recursively merged, merge needs to operate on any value, not only on records:
 //!
-//! - *function*: merging a function with anything else fails
+//! - *function*: functions are merged pointwise, that is `f & g` is `fun x => f x & g x`.
+//!   Merging a function with anything else fails
 //! - *values*: merging any other values succeeds if and only if these two values are equals, in
 //!   which case it evaluates to this common value.
 //!
@@ -405,6 +406,22 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     ),
                     final_pos,
                 ))
+            }
+            // Functions are merged pointwise: `f & g` is `fun x => f x & g x`. As for records and
+            // enum variants, the inner merge carries the original merge label, so that a failure
+            // that only surfaces when the function is applied still points to the original merge.
+            (ValueContentRef::Term(Term::Fun(_)), ValueContentRef::Term(Term::Fun(_))) => {
+                let f1 = v1.closurize(&mut self.context.cache, env1);
+                let f2 = v2.closurize(&mut self.context.cache, env2);
+                let arg = LocIdent::fresh();
+
+                let body = mk_term::op2(
+                    BinaryOp::Merge(mode.into()),
+                    Term::app(f1, Term::Var(arg).into()),
+                    Term::app(f2, Term::Var(arg).into()),
+                );
+
+                Ok(NickelValue::term(Term::fun(arg, body), pos_op_inh))
             }
             _ => Err(Box::new(EvalErrorKind::MergeIncompatibleArgs {
                 left_arg: v1,

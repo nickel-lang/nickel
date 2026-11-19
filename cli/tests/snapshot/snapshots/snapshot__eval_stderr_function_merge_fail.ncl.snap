@@ -1,0 +1,18 @@
+---
+source: cli/tests/snapshot/main.rs
+expression: err
+---
+error: non mergeable terms
+  ┌─ [INPUTS_PATH]/errors/function_merge_fail.ncl:3:24
+  │
+3 │ let port = fun base => base + 1 in
+  │                        ^^^^^^^^ cannot merge this expression
+4 │ (port & (fun base => base + 2)) 8000
+  │ ---------------------^^^^^^^^--
+  │ │                    │
+  │ │                    with this expression
+  │ originally merged here
+  │
+  = Merge operands have the same merge priority but they can't be combined.
+  = Both values are of type Number but they aren't equal.
+  = Number values can only be merged if they are equal

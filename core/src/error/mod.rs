@@ -1222,16 +1222,6 @@ impl IntoDiagnostics for EvalErrorData {
                         "String" | "Number" | "Bool" | "Array" | "EnumTag" => {
                             push_merge_note(&mut notes, left_ty);
                         }
-                        "Function" | "MatchExpression" => {
-                            notes.push(
-                                "Both values are functions (or match expressions)".to_owned(),
-                            );
-                            notes.push(
-                                "Functions can never be merged with anything else, \
-                                even another function."
-                                    .to_owned(),
-                            );
-                        }
                         "EnumVariant" => {
                             if let (
                                 Some(EnumVariantData { tag: tag1, .. }),
@@ -1261,7 +1251,9 @@ impl IntoDiagnostics for EvalErrorData {
                                         .to_owned(),
                                 );
                                 notes.push("Enum variants must have the same tag.".to_owned());
-                                notes.push("Functions can never be merged.".to_owned());
+                                notes.push(
+                                    "Functions can only be merged with functions.".to_owned(),
+                                );
                             }
                         }
                         _ => {
@@ -1272,7 +1264,7 @@ impl IntoDiagnostics for EvalErrorData {
                                     .to_owned(),
                             );
                             notes.push("Enum variants must have the same tag.".to_owned());
-                            notes.push("Functions can never be merged.".to_owned());
+                            notes.push("Functions can only be merged with functions.".to_owned());
                         }
                     }
                 }
