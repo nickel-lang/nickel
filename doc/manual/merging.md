@@ -223,8 +223,19 @@ v1 & v2 = v1               if (type_of(v1) is Number, Bool, String, Enum or
 
           v2 | Equal v1    if type_of(v1) is Array and type_of(v2) is Array
 
+          fun x => v1 x & v2 x
+                           if type_of(v1) is Function
+                              and type_of(v2) is Function
+
           _|_              otherwise (indicates failure)
 ```
+
+Functions are merged pointwise: the result of the merge, applied to an argument,
+is the merge of the results of both functions applied to that argument. For
+example, `(fun x => {a = x}) & (fun x => {b = x})` behaves like
+`fun x => {a = x, b = x}`. As with fields, the merge of the results only happens
+when the merged function is called. If it fails, the error points to the
+original merge.
 
 ### Example
 
