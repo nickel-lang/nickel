@@ -856,6 +856,18 @@ impl IntoDiagnostics for Diagnostic<FileId> {
 
 // Helpers for the creation of codespan `Label`s
 
+/// The most characters of a `doc` annotation shown in an error message.
+const MAX_DOC_CHARS: usize = 80;
+
+/// Shorten a documentation string for an error message, ending it with `…` if it was cut.
+/// Documentation can run to several paragraphs, which would bury the rest of the error.
+fn abbreviate_doc(doc: &str) -> String {
+    match doc.char_indices().nth(MAX_DOC_CHARS) {
+        Some((end, _)) => format!("{}\u{2026}", &doc[..end]),
+        None => doc.to_owned(),
+    }
+}
+
 /// Create a primary label from a span.
 fn primary(span: &RawSpan) -> Label<FileId> {
     Label::primary(span.src_id, span.start.to_usize()..span.end.to_usize())
@@ -1321,8 +1333,14 @@ impl IntoDiagnostics for EvalErrorData {
                         .with_message("non mergeable documentation")
                         .with_labels(labels)
                         .with_notes(vec![
-                            format!("The documentation of the left operand is: {left_doc:?}"),
-                            format!("The documentation of the right operand is: {right_doc:?}"),
+                            format!(
+                                "The documentation of the left operand is: {:?}",
+                                abbreviate_doc(&left_doc)
+                            ),
+                            format!(
+                                "The documentation of the right operand is: {:?}",
+                                abbreviate_doc(&right_doc)
+                            ),
                             "When two definitions of a field both have a `doc` annotation, \
                             the two documentations must be equal"
                                 .to_owned(),
