@@ -92,7 +92,12 @@ pub enum Error {
     PackageIndexDeserialization {
         error: serde_json::Error,
     },
-    Resolution(Box<ResolveError>),
+    Resolution {
+        error: Box<ResolveError>,
+        /// Index packages involved in the failed resolution that don't exist in
+        /// the index at all.
+        missing: Vec<index::Id>,
+    },
     /// Based on the index id, we expected a manifest file to have a path
     /// ending with a particular suffix but it didn't.
     MismatchedManifestPath {
@@ -217,9 +222,13 @@ impl std::fmt::Display for Error {
             Error::OtherGit(error) => {
                 write!(f, "{error}")
             }
-            Error::Resolution(e) => {
+            Error::Resolution { error, missing } => {
                 writeln!(f, "package version resolution failed:")?;
-                crate::resolve::print_resolve_error(f, e)
+                crate::resolve::print_resolve_error(f, error)?;
+                for id in missing {
+                    write!(f, "\npackage {id} not found in the index")?;
+                }
+                Ok(())
             }
             Error::InvalidPathInIndexPackage { inner, id } => {
                 writeln!(f, "invalid path in package {id}: {inner}")
