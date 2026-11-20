@@ -1733,13 +1733,13 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 // the result of such an operation would be huge and impractical to
                 // store.
                 //
-                // We first try to convert the rational to an `isize`, in which case the
-                // power is computed in an exact way.
+                // We first try to convert the rational to an `i32`, in which case the power is
+                // computed in an exact way.
                 //
                 // If the conversion fails, we fallback to converting both the exponent and
                 // the value to the nearest `f64`, perform the exponentiation, and convert
                 // the result back to rationals, with a possible loss of precision.
-                let result = if let Ok(n2_as_int) = isize::try_from(n2) {
+                let result = if let Ok(n2_as_int) = i32::try_from(n2).and_then(isize::try_from) {
                     n1.pow(n2_as_int)
                 } else {
                     let result_as_f64 = n1.to_f64().powf(n2.to_f64());
