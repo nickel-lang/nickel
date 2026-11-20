@@ -3886,6 +3886,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nickel-lang-map"
+version = "0.1.0"
+dependencies = [
+ "arbitrary",
+ "arbtest",
+ "criterion",
+ "imbl-sized-chunks",
+ "rpds",
+ "serde",
+]
+
+[[package]]
 name = "nickel-lang-package"
 version = "0.8.0"
 dependencies = [

@@ -13,6 +13,7 @@ members = [
     "py-nickel",
     "utils",
     "vector",
+		"map",
     "wasm-repl",
 ]
 resolver = "2"

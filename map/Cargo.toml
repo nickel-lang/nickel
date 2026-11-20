@@ -1,0 +1,24 @@
+[package]
+name = "nickel-lang-map"
+version = "0.1.0"
+description = "Persistent maps for Nickel"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+bench = false
+
+[dependencies]
+imbl-sized-chunks.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+arbitrary.workspace = true
+arbtest.workspace = true
+criterion.workspace = true
+rpds.workspace = true
