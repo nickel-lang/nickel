@@ -19,7 +19,10 @@ use std::{
 };
 
 use codespan_reporting::term::termcolor::{Ansi, NoColor, WriteColor};
-use malachite::base::{num::conversion::traits::RoundingFrom, rounding_modes::RoundingMode};
+use malachite::base::{
+    num::{arithmetic::traits::Sign as _, conversion::traits::RoundingFrom},
+    rounding_modes::RoundingMode,
+};
 
 use nickel_lang_core::{
     cache::{CacheHub, InputFormat, SourcePath},
@@ -729,8 +732,11 @@ impl Number<'_> {
     /// The exact value of this number, as a rational number.
     ///
     /// Both the numerator and denominator are provided as decimal strings.
-    pub fn as_rational(&self) -> (String, String) {
+    /// The "sign" term is the comparison between this number and zero
+    /// (i.e., `Ordering::Greater` if this number is positive).
+    pub fn as_rational(&self) -> (std::cmp::Ordering, String, String) {
         (
+            self.num.sign(),
             self.num.numerator_ref().to_string(),
             self.num.denominator_ref().to_string(),
         )

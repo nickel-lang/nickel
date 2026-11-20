@@ -941,6 +941,7 @@ pub unsafe extern "C" fn nickel_number_as_f64(num: *const nickel_number) -> f64 
 
 /// The value of this number, as an exact rational number.
 ///
+/// - `out_sign` will be overwritten by 0, -1, or 1.
 /// - `out_numerator` must have been allocated with [`nickel_string_alloc`]. It
 ///   will be overwritten with the numerator, as a decimal string.
 /// - `out_denominator` must have been allocated with [`nickel_string_alloc`].
@@ -948,12 +949,14 @@ pub unsafe extern "C" fn nickel_number_as_f64(num: *const nickel_number) -> f64 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nickel_number_as_rational(
     num: *const nickel_number,
+    out_sign: *mut c_int,
     out_numerator: *mut nickel_string,
     out_denominator: *mut nickel_string,
 ) {
     // Safety: pre-conditions of this function
     unsafe {
-        let (numerator, denominator) = nickel_number::as_rust(&num).as_rational();
+        let (sign, numerator, denominator) = nickel_number::as_rust(&num).as_rational();
+        *out_sign = sign as c_int;
         *out_numerator = nickel_string { inner: numerator };
         *out_denominator = nickel_string { inner: denominator };
     }
