@@ -956,7 +956,7 @@ pub unsafe extern "C" fn nickel_number_as_rational(
     // Safety: pre-conditions of this function
     unsafe {
         let (sign, numerator, denominator) = nickel_number::as_rust(&num).as_rational();
-	*out_sign = sign as c_int;
+        *out_sign = sign as c_int;
         *out_numerator = nickel_string { inner: numerator };
         *out_denominator = nickel_string { inner: denominator };
     }
