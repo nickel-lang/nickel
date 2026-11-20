@@ -754,6 +754,11 @@ and raises an error otherwise. This keeps the merge operator commutative. This
 check doesn't apply when a contract is applied to a value with `|`: the contract
 and the value are then allowed to have different documentations.
 
+The same rule applies when a field is defined twice in a single record literal:
+`{ a | doc "x" = 1, a | doc "y" = 2 }` is rejected when the field is evaluated,
+because the two definitions are combined as if the literal had been written
+`{ a | doc "x" = 1 } & { a | doc "y" = 2 }`.
+
 ## Recursive overriding
 
 We've seen that default values are useful to override a single field with a

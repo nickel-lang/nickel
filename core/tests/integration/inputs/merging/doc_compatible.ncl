@@ -20,5 +20,8 @@ let Assert = std.test.Assert in
   # Merging a record with itself is fine.
   let r = { a | doc "foo" = 1 } in
   (r & r) == { a = 1 },
+
+  # A field defined twice in the same literal with equal documentations is fine.
+  { a | doc "foo" = 1, a | doc "foo" = 1 } == { a = 1 },
 ]
 |> std.test.assert_all

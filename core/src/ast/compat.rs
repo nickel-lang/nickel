@@ -7,6 +7,7 @@
 use super::{primop::PrimOp, *};
 use crate::{
     combine::Combine,
+    error::EvalErrorKind,
     eval::value::{
         ArrayData, Container, EnumVariantData, NickelValue, TypeData, ValueContentRef,
         ValueContentRefMut,
@@ -1418,7 +1419,7 @@ impl<'ast> FromAst<Record<'ast>>
                     let prev = occpd.insert(term::record::Field::default());
 
                     // unwrap(): the field's identifier must have a position during parsing.
-                    occpd.insert(merge_fields(pos_table.push(id.pos), prev, field));
+                    occpd.insert(merge_fields(id, pos_table.push(id.pos), prev, field));
                 }
                 Entry::Vacant(vac) => {
                     vac.insert(field);
@@ -1489,6 +1490,7 @@ impl<'ast> FromAst<Record<'ast>>
 ///
 /// This is a helper for the conversion of a record definition to mainline.
 fn merge_fields(
+    id: LocIdent,
     id_span: PosIdx,
     field1: term::record::Field,
     field2: term::record::Field,
@@ -1516,7 +1518,7 @@ fn merge_fields(
                 fields.extend(left);
                 fields.extend(right);
                 for (id, (field1, field2)) in center.into_iter() {
-                    fields.insert(id, merge_fields(id_span, field1, field2));
+                    fields.insert(id, merge_fields(id, id_span, field1, field2));
                 }
 
                 // See [^closurize-insertion]
@@ -1550,6 +1552,29 @@ fn merge_fields(
         (None, Some(t)) => (Some(t), metadata2.priority),
         (None, None) => (None, Default::default()),
         _ => unreachable!(),
+    };
+
+    // Two definitions of the same field in a single record literal are combined here, where no
+    // error can be returned. If their `doc` annotations differ, defer to evaluation: the field's
+    // value becomes a `RuntimeError`, exactly like a conflicting standard merge would report.
+    let value = match (metadata1.doc.as_ref(), metadata2.doc.as_ref()) {
+        (Some(doc1), Some(doc2))
+            if value.is_some() && !std::ptr::eq(doc1, doc2) && doc1 != doc2 =>
+        {
+            Some(NickelValue::term(
+                term::Term::RuntimeError(Box::new(EvalErrorKind::MergeIncompatibleDoc {
+                    field: id,
+                    left_doc: doc1.to_string(),
+                    right_doc: doc2.to_string(),
+                    merge_label: label::MergeLabel {
+                        span: id_span,
+                        kind: ast::MergeKind::PiecewiseDef,
+                    },
+                })),
+                id_span,
+            ))
+        }
+        _ => value,
     };
 
     // At this stage, pending contracts aren't filled nor meaningful, and should all be empty.
