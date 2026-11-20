@@ -50,7 +50,7 @@ impl std::error::Error for TryFromFloatError {}
 impl Number {
     #[inline]
     pub fn zero() -> Self {
-        Number::from(0)
+        Number(RBig::ZERO)
     }
 
     #[inline]
