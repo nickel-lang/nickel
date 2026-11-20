@@ -13,10 +13,6 @@ use serde::{
     ser::{Serialize, SerializeMap, SerializeSeq, Serializer},
 };
 
-use malachite::base::{
-    num::conversion::traits::{IsInteger, RoundingFrom},
-    rounding_modes::RoundingMode,
-};
 use once_cell::sync::Lazy;
 
 use std::{fmt, io};
@@ -87,16 +83,15 @@ impl fmt::Display for ParseFormatError {
 // Float deserialization, and in particular the handling of floats that are not representable as
 // Nickel number (NaN and infs)
 mod float {
-    use malachite::base::num::basic::floats::PrimitiveFloat;
-
     // Enum tags used for non-representable float values.
     const PLUS_INF_TAG: &str = "PlusInfinity";
     const MINUS_INF_TAG: &str = "MinusInfinity";
     const NOT_A_NUMBER_TAG: &str = "NotANumber";
 
     pub mod value {
-        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG, PrimitiveFloat};
+        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG};
         use crate::{eval::value::NickelValue, term::Number};
+        use nickel_lang_parser::number::{PrimitiveFloat, TryFromFloatError};
 
         /// The constant Nickel value we use to deserialize `inf`/`+inf` float values.
         pub fn plus_inf() -> NickelValue {
@@ -119,11 +114,8 @@ mod float {
         /// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
         pub fn deserialize_float<F: PrimitiveFloat>(f: F) -> NickelValue
         where
-            Number: TryFrom<
-                    F,
-                    Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
-                >,
-{
+            Number: TryFrom<F, Error = TryFromFloatError>,
+        {
             Number::try_from_float_simplest(f)
                 .map(NickelValue::number_posless)
                 .unwrap_or_else(|_| if f.is_nan() {
@@ -139,8 +131,9 @@ mod float {
     }
 
     pub(super) mod ast {
-        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG, PrimitiveFloat};
+        use super::{MINUS_INF_TAG, NOT_A_NUMBER_TAG, PLUS_INF_TAG};
         use crate::ast::{AstAlloc, Node, Number};
+        use nickel_lang_parser::number::{PrimitiveFloat, TryFromFloatError};
 
         /// The constant Nickel value we use to deserialize `inf`/`+inf` float values.
         pub fn plus_inf(alloc: &AstAlloc) -> Node<'_> {
@@ -163,11 +156,8 @@ mod float {
         /// NaN or infinity, which is why the return value is a generic `NickelValue` and not a `Number`.
         pub fn deserialize_float<F: PrimitiveFloat>(alloc: &AstAlloc, f: F) -> Node<'_>
         where
-            Number: TryFrom<
-                    F,
-                    Error = malachite_q::conversion::from_primitive_float::RationalFromPrimitiveFloatError,
-                >,
-{
+            Number: TryFrom<F, Error = TryFromFloatError>,
+        {
             Number::try_from_float_simplest(f)
                 .map(|n| alloc.number(n))
                 .unwrap_or_else(|_| if f.is_nan() {
@@ -198,7 +188,7 @@ where
     S: Serializer,
 {
     if n.is_integer() {
-        if *n < 0 {
+        if *n < Number::zero() {
             if let Ok(n_as_integer) = i64::try_from(n) {
                 return n_as_integer.serialize(serializer);
             }
@@ -207,9 +197,7 @@ where
         }
     }
 
-    f64::rounding_from(n, RoundingMode::Nearest)
-        .0
-        .serialize(serializer)
+    n.to_f64().serialize(serializer)
 }
 
 /// Serializer for annotated values.
@@ -997,6 +985,35 @@ mod tests {
         assert_nickel_eq(&mut vm_ctxt, from_json, evaluated.clone());
         assert_nickel_eq(&mut vm_ctxt, from_yaml, evaluated.clone());
         assert_nickel_eq(&mut vm_ctxt, from_toml, evaluated);
+    }
+
+    #[test]
+    fn numbers() {
+        assert_json_eq("1/3", 0.3333333333333333);
+        assert_json_eq("0.1 + 0.2", 0.3);
+        assert_json_eq("9223372036854775807", i64::MAX);
+        assert_json_eq("-9223372036854775808", i64::MIN);
+        assert_json_eq("18446744073709551615", u64::MAX);
+        assert_json_eq("18446744073709551616", 18446744073709551616.0);
+        assert_json_eq("-9223372036854775809", -9223372036854775809.0);
+        assert_json_eq("-1e-400", -0.0);
+
+        for (json, expected) in [
+            ("0.1", "1/10"),
+            ("-2.75", "-11/4"),
+            ("123456.789", "123456789/1000"),
+            (
+                "1e300",
+                "1000000000000000052504760255204420248704468581108159154915854115511802457988908195786371375080447864043704443832883878176942523235360430575644792184786706982848387200926575803737830233794788090059368953234970799945081119038967640880074652742780142494579258788820056842838115669472196386865459400540160",
+            ),
+            ("18446744073709551616", "18446744073709551616"),
+            ("-9223372036854775808", "-9223372036854775808"),
+        ] {
+            let value: NickelValue = serde_json::from_str(json).unwrap();
+            assert_eq!(value.as_number().unwrap().to_string(), expected, "{json}");
+        }
+
+        assert_involutory("{a = 1/3, b = -2.5, c = 1e20, d = 0.1, e = 18446744073709551615}");
     }
 
     #[test]
