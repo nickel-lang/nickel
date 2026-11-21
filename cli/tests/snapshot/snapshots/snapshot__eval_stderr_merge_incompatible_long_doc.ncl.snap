@@ -1,0 +1,20 @@
+---
+source: cli/tests/snapshot/main.rs
+expression: err
+---
+error: non mergeable documentation
+   ┌─ [INPUTS_PATH]/errors/merge_incompatible_long_doc.ncl:6:3
+   │  
+ 5 │ ╭ {
+ 6 │ │   port
+   │ │   ^^^^ this field has two different documentations
+ 7 │ │     | doc "Päivä ja yö: the port the server listens on. Clients connect here, so it must be reachable from outside the machine."
+ 8 │ │     = 80,
+   · │
+11 │ │   port | doc "Listening port." | Number,
+12 │ │ }
+   │ ╰─' originally merged here
+   │  
+   = The documentation of the left operand is: "Päivä ja yö: the port the server listens on. Clients connect here, so it must be…"
+   = The documentation of the right operand is: "Listening port."
+   = When two definitions of a field both have a `doc` annotation, the two documentations must be equal
