@@ -341,10 +341,9 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     pos1.to_inherited()
                 };
 
-                // Documentation conflicts are only reported for standard merges. When applying a
-                // contract, the contract's own documentation is allowed to differ from the one of
-                // the value it is applied to.
-                let check_docs = matches!(mode, MergeMode::Standard(_));
+                // Documentation conflicts are reported for every merge, including contract
+                // application: applying a contract behaves like live merging, so two different
+                // `doc` annotations on the same field are an error there as well.
                 let merge_label = MergeLabel::from(mode);
 
                 let field_names: Vec<_> = left
@@ -376,9 +375,7 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 );
 
                 for (id, (field1, field2)) in center.into_iter() {
-                    if check_docs {
-                        check_doc_compatible(id, &field1, &field2, merge_label)?;
-                    }
+                    check_doc_compatible(id, &field1, &field2, merge_label)?;
 
                     m.insert(
                         id,

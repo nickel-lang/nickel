@@ -13,9 +13,9 @@ let Assert = std.test.Assert in
   # Documentation of different fields doesn't interact.
   ({ a | doc "foo" = 1 } & { b | doc "bar" = 2 }) == { a = 1, b = 2 },
 
-  # A value doesn't conflict with a contract that has its own documentation.
-  let Contract = { a | doc "from the contract" | Number } in
-  ({ a | doc "from the value" = 1 } | Contract) == { a = 1 },
+  # A value with the same documentation as the contract is fine.
+  let Contract = { a | doc "same doc" | Number } in
+  ({ a | doc "same doc" = 1 } | Contract) == { a = 1 },
 
   # Merging a record with itself is fine.
   let r = { a | doc "foo" = 1 } in
