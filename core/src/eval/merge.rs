@@ -373,6 +373,8 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 );
 
                 for (id, (field1, field2)) in center.into_iter() {
+                    check_doc_compatible(id, &field1, &field2, merge_label)?;
+
                     m.insert(
                         id,
                         merge_fields(
@@ -443,6 +445,30 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 value.into()
             }
         })
+    }
+}
+
+/// Check that two fields that are about to be merged don't carry different documentations.
+///
+/// If only one of the fields has a `doc` annotation, or if both have the same one, this is fine.
+/// Documentation strings are shared (reference-counted), so we first try pointer equality before
+/// comparing the text.
+fn check_doc_compatible(
+    field: LocIdent,
+    field1: &Field,
+    field2: &Field,
+    merge_label: MergeLabel,
+) -> Result<(), ErrorKind> {
+    match (field1.metadata.doc(), field2.metadata.doc()) {
+        (Some(doc1), Some(doc2)) if !std::ptr::eq(doc1, doc2) && doc1 != doc2 => {
+            Err(Box::new(EvalErrorKind::MergeIncompatibleDoc {
+                field,
+                left_doc: doc1.to_string(),
+                right_doc: doc2.to_string(),
+                merge_label,
+            }))
+        }
+        _ => Ok(()),
     }
 }
 

@@ -759,9 +759,17 @@ Available fields
 • field
 ```
 
-If both sides have documentation, the behavior is unspecified, as merging two
-distinct blobs of text doesn't make sense in general. Currently, Nickel will
-randomly keep one of the two.
+If both sides have documentation, merging two distinct blobs of text doesn't
+make sense in general. Nickel thus requires the two documentations to be equal,
+and raises an error otherwise. This keeps the merge operator commutative. The
+same rule applies when a contract is applied to a value with `|`: applying a
+contract behaves like live merging, so a field whose `doc` differs between the
+value and the contract is rejected as well.
+
+The same rule applies when a field is defined twice in a single record literal:
+`{ a | doc "x" = 1, a | doc "y" = 2 }` is rejected when the field is evaluated,
+because the two definitions are combined as if the literal had been written
+`{ a | doc "x" = 1 } & { a | doc "y" = 2 }`.
 
 ## Recursive overriding
 

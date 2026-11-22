@@ -179,6 +179,8 @@ enum ErrorExpectation {
     EvalMissingFieldDef { field: String },
     #[serde(rename = "EvalError::MergeIncompatibleArgs")]
     EvalMergeIncompatibleArgs,
+    #[serde(rename = "EvalError::MergeIncompatibleDoc")]
+    EvalMergeIncompatibleDoc,
     #[serde(rename = "EvalError::NonExhaustiveMatch")]
     EvalNonExhaustiveMatch,
     #[serde(rename = "EvalError::NonExhaustiveEnumMatch")]
@@ -253,6 +255,7 @@ impl PartialEq<Error> for ErrorExpectation {
                 | (EvalUnaryPrimopTypeError, EvalErrorKind::UnaryPrimopTypeError { .. })
                 | (EvalInfiniteRecursion, EvalErrorKind::InfiniteRecursion(..))
                 | (EvalMergeIncompatibleArgs, EvalErrorKind::MergeIncompatibleArgs { .. })
+                | (EvalMergeIncompatibleDoc, EvalErrorKind::MergeIncompatibleDoc { .. })
                 | (EvalOther, EvalErrorKind::Other(..))
                 | (EvalNonExhaustiveMatch, EvalErrorKind::NonExhaustiveMatch { .. })
                 | (EvalNonExhaustiveEnumMatch, EvalErrorKind::NonExhaustiveEnumMatch { .. })
@@ -420,6 +423,7 @@ impl std::fmt::Display for ErrorExpectation {
             EvalIncomparableValues => "EvalError::IncomparableValues".to_owned(),
             EvalOther => "EvalError::Other".to_owned(),
             EvalMergeIncompatibleArgs => "EvalError::MergeIncompatibleArgs".to_owned(),
+            EvalMergeIncompatibleDoc => "EvalError::MergeIncompatibleDoc".to_owned(),
             EvalNAryPrimopTypeError => "EvalError::NAryPrimopTypeError".to_owned(),
             EvalUnaryPrimopTypeError => "EvalError::UnaryPrimopTypeError".to_owned(),
             EvalInfiniteRecursion => "EvalError::InfiniteRecursion".to_owned(),

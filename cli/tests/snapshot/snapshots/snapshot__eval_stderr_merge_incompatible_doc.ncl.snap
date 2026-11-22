@@ -1,0 +1,19 @@
+---
+source: cli/tests/snapshot/main.rs
+expression: err
+---
+error: non mergeable documentation
+   ┌─ [INPUTS_PATH]/errors/merge_incompatible_doc.ncl:4:3
+   │  
+ 4 │     port | doc "The port." | Number,
+   │     ^^^^ this field has two different documentations
+   ·  
+ 8 │ ╭ base & {
+ 9 │ │   port | doc "Listening port." = 80,
+10 │ │   host = "localhost",
+11 │ │ }
+   │ ╰─' originally merged here
+   │  
+   = The documentation of the left operand is: "The port."
+   = The documentation of the right operand is: "Listening port."
+   = When two definitions of a field both have a `doc` annotation, the two documentations must be equal
