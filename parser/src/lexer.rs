@@ -372,6 +372,8 @@ pub enum NormalToken<'input> {
     StringBase64Decode,
     #[token("%to_string%")]
     ToString,
+    #[token("%debug_string%")]
+    DebugString,
     #[token("%number/from_string%")]
     NumberFromString,
     #[token("%enum/from_string%")]

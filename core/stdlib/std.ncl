@@ -5467,6 +5467,22 @@
     "%
     = fun msg x => %trace% msg x,
 
+  trace_expr
+    : forall a. a -> a
+    | doc m%"
+      `std.trace_expr x` a human-readable debug representation of `x`, then
+      proceeds with the evaluation of `x`.
+
+      # Examples
+
+      ```nickel
+      std.trace_expr { value = 'Hello "world" }
+      # std.trace: { value = 'Hello "world" }
+      # => { value = 'Hello "world" }
+      ```
+    "%
+    = fun x => %trace% (%debug_string% x) x,
+
   FailWith
     | doc m%"
       A contract that always fails with the given message.

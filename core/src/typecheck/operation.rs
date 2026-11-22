@@ -189,6 +189,11 @@ impl PrimOpType for PrimOp {
             PrimOp::StringLength => (vec![mk_uniftype::str()], mk_uniftype::num()),
             // Dyn -> Str
             PrimOp::ToString => (vec![mk_uniftype::dynamic()], mk_uniftype::str()),
+            // forall a. a -> Str
+            PrimOp::DebugString => {
+                let ty = state.table.fresh_type_uvar(var_level);
+                (vec![ty], mk_uniftype::str())
+            }
             // Str -> Num
             PrimOp::NumberFromString => (vec![mk_uniftype::str()], mk_uniftype::num()),
             // Str -> < | a> for a rigid type variable a

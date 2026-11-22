@@ -1010,6 +1010,9 @@ pub enum UnaryOp {
     /// Transform a data to a string.
     ToString,
 
+    /// Transform a data to a human-readable debug format.
+    DebugString,
+
     /// Transform a string to a number.
     NumberFromString,
 
@@ -1213,6 +1216,7 @@ impl fmt::Display for UnaryOp {
             StringLowercase => write!(f, "string/lowercase"),
             StringLength => write!(f, "string/length"),
             ToString => write!(f, "to_string"),
+            DebugString => write!(f, "dbg_string"),
             NumberFromString => write!(f, "number/from_string"),
             EnumFromString => write!(f, "enum/from_string"),
             StringIsMatch => write!(f, "string/is_match"),

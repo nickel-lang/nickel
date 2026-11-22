@@ -253,6 +253,17 @@ pub enum PrimOp {
     /// 1. The data to transform.
     ToString,
 
+    /// Transform a data to a human-readable string for debugging.
+    ///
+    /// Unlike `ToString`, this works for all possible values, but
+    /// there's also no expectation that you can go back from the
+    /// string to the value.
+    ///
+    /// # Arguments
+    ///
+    /// 1. The data to transform.
+    DebugString,
+
     /// Transform a string to a number.
     ///
     /// # Arguments
@@ -1001,6 +1012,7 @@ impl fmt::Display for PrimOp {
             StringBase64Encode => write!(f, "string/base64_encode"),
             StringBase64Decode => write!(f, "string/base64_decode"),
             ToString => write!(f, "to_string"),
+            DebugString => write!(f, "debug_string"),
             NumberFromString => write!(f, "number/from_string"),
             EnumFromString => write!(f, "enum/from_string"),
             StringIsMatch => write!(f, "string/is_match"),
@@ -1130,6 +1142,7 @@ impl PrimOp {
             | StringLowercase
             | StringLength
             | ToString
+            | DebugString
             | NumberFromString
             | EnumFromString
             | StringIsMatch
