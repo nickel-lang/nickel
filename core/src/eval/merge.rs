@@ -341,9 +341,6 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     pos1.to_inherited()
                 };
 
-                // Documentation conflicts are reported for every merge, including contract
-                // application: applying a contract behaves like live merging, so two different
-                // `doc` annotations on the same field are an error there as well.
                 let merge_label = MergeLabel::from(mode);
 
                 let field_names: Vec<_> = left
