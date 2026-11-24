@@ -206,16 +206,12 @@ avoid it altogether by testing for closure equality. The important
 point is that this is merely an optimization. The meaning does not
 depend on it.
 
-A key function must return a scalar or arrays of scalars. The order is
-fixed by the language as follows:
-
-| Key | Order |
-| --- | --- |
-| numbers | by value |
-| strings | lexicographically, by code point |
-| booleans | `false` before `true` |
-| enum tags | by name |
-| arrays of the above | lexicographically, element by element |
+A key function must return a scalar or an array of scalars. For each
+type, the order is fixed by the language to be the order implied by
+the comparison operator for that type found in the standard library
+(`std.string.compare` for strings, `std.number.compare` for numbers,
+etc). A key function that returns key values of different type is an
+error.
 
 Arrays are used to conveniently express compound keys (see Kubernetes
 example below).
