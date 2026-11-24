@@ -294,8 +294,13 @@ pointwise, as for functions. On types, merging is done by equality.
 Furthermore, a coercion is a contract obeying the following two laws:
 
 1. a coercion is idempotent,
-2. the image of a coercion is closed under merge where the merge is
-   defined.
+2. the coercion and merge commute:
+
+   ```nickel
+   (x & y) | C == (x | C) & (y | C)
+   ```
+
+   whenever `x & y` is defined.
 
 The above laws capture the idea that coercions cannot accept two
 values but not their merge. Whereas other contracts are partial
