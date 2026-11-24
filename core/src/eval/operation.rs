@@ -1739,7 +1739,9 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 // If the conversion fails, we fallback to converting both the exponent and
                 // the value to the nearest `f64`, perform the exponentiation, and convert
                 // the result back to rationals, with a possible loss of precision.
-                let result = if let Ok(n2_as_int) = i32::try_from(n2).and_then(isize::try_from) {
+                let result = if let Some(n2_as_int) =
+                    i32::try_from(n2).ok().and_then(|n| isize::try_from(n).ok())
+                {
                     n1.pow(n2_as_int)
                 } else {
                     let result_as_f64 = n1.to_f64().powf(n2.to_f64());
