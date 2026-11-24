@@ -62,7 +62,7 @@ impl IsAtom for Node<'_> {
         | Node::PrimOpApp { op: PrimOp::BoolAnd, args: _ }
         | Node::PrimOpApp { op: PrimOp::BoolOr, args: _ } => true,
         // A number with a minus sign as a prefix isn't a proper atom
-        Node::Number(n) => **n >= Number::zero(),
+        Node::Number(n) => **n >= Number::ZERO,
         Node::Type(typ) => typ.is_atom(),
         Node::Let {..}
         | Node::IfThenElse {..}

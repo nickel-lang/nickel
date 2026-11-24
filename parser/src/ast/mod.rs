@@ -226,8 +226,8 @@ impl Ord for MergePriority {
             (MergePriority::Top, _) | (_, MergePriority::Bottom) => Ordering::Greater,
 
             // Neutral and numeral.
-            (MergePriority::Neutral, MergePriority::Numeral(n)) => Number::zero().cmp(n),
-            (MergePriority::Numeral(n), MergePriority::Neutral) => n.cmp(&Number::zero()),
+            (MergePriority::Neutral, MergePriority::Numeral(n)) => Number::ZERO.cmp(n),
+            (MergePriority::Numeral(n), MergePriority::Neutral) => n.cmp(&Number::ZERO),
         }
     }
 }
@@ -236,7 +236,7 @@ impl fmt::Display for MergePriority {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MergePriority::Bottom => write!(f, "default"),
-            MergePriority::Neutral => write!(f, "{}", Number::zero()),
+            MergePriority::Neutral => write!(f, "{}", Number::ZERO),
             MergePriority::Numeral(p) => write!(f, "{p}"),
             MergePriority::Top => write!(f, "force"),
         }

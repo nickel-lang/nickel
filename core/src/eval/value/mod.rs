@@ -1287,7 +1287,7 @@ impl NickelValue {
             | DataTag::SealingKey
             | DataTag::Label
             | DataTag::String => true,
-            DataTag::Number => self.as_value_data::<NumberData>().unwrap() >= &Number::zero(),
+            DataTag::Number => self.as_value_data::<NumberData>().unwrap() >= &Number::ZERO,
             DataTag::EnumVariant => self
                 .as_value_data::<EnumVariantData>()
                 .unwrap()

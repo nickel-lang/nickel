@@ -120,7 +120,7 @@ fn arithmetic() {
     assert_eq!(-ratio(1, 2), number("-0.5"));
     assert_eq!(&ratio(2, 3) / &ratio(4, 9), ratio(3, 2));
     assert!(ratio(1, 3) < number("0.3333333333333334"));
-    assert!(Number::zero().is_zero());
+    assert!(Number::ZERO.is_zero());
     assert!(Number::from(4).is_integer());
     assert!(!ratio(9, 2).is_integer());
 }
@@ -130,7 +130,7 @@ fn pow() {
     assert_eq!(ratio(2, 3).pow(-3), ratio(27, 8));
     assert_eq!(Number::from(10).pow(20), number("1e20"));
     assert_eq!(Number::from(-2).pow(3), Number::from(-8));
-    assert_eq!(Number::zero().pow(0), Number::from(1));
+    assert_eq!(Number::ZERO.pow(0), Number::from(1));
     assert_eq!(ratio(1, 2).pow(64).to_string(), "1/18446744073709551616");
 }
 

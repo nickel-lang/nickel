@@ -579,7 +579,7 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                     return mk_type_error!("Number");
                 };
 
-                if n < &Number::zero() {
+                if n < &Number::ZERO {
                     return Err(Box::new(EvalErrorKind::Other(
                         format!(
                             "array/generate expects its first argument to be a positive number, got {n}"

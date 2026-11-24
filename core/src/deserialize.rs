@@ -44,7 +44,7 @@ macro_rules! round_saturating {
     ($type:ty) => {
         |n: &Number| {
             let n = n.round();
-            <$type>::try_from(&n).unwrap_or(if n < Number::zero() {
+            <$type>::try_from(&n).unwrap_or(if n < Number::ZERO {
                 <$type>::MIN
             } else {
                 <$type>::MAX

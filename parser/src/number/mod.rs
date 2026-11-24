@@ -48,10 +48,7 @@ impl fmt::Display for TryFromFloatError {
 impl std::error::Error for TryFromFloatError {}
 
 impl Number {
-    #[inline]
-    pub fn zero() -> Self {
-        Number(RBig::ZERO)
-    }
+    pub const ZERO: Self = Self(RBig::ZERO);
 
     #[inline]
     pub fn is_zero(&self) -> bool {

@@ -1415,7 +1415,7 @@ InfixExpr: UniTerm<'ast> = {
 
     #[precedence(level="1")]
     "-" <AsTerm<InfixExpr>> =>
-        UniTerm::from(primop_app!(alloc, PrimOp::Sub, alloc.number(Number::zero()), <>)),
+        UniTerm::from(primop_app!(alloc, PrimOp::Sub, alloc.number(Number::ZERO), <>)),
 
     #[precedence(level="2")] #[assoc(side="left")]
     InfixBOpApp<InfixBOp2, InfixExpr, InfixExpr>,

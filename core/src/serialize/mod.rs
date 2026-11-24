@@ -188,7 +188,7 @@ where
     S: Serializer,
 {
     if n.is_integer() {
-        if *n < Number::zero() {
+        if *n < Number::ZERO {
             if let Ok(n_as_integer) = i64::try_from(n) {
                 return n_as_integer.serialize(serializer);
             }
