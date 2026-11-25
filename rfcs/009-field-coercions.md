@@ -438,12 +438,19 @@ in Nickel.
 Unlike in [RFC001][], merging is still driven by the shape of values
 alone. So merging in a different semilattice of numbers like `max`, as
 in the `net.core.rmem_max` sysctl use case in the motivation, is not
-supported. We consider this use case rare enough to set it aside. If
-controlling the join semilattice of merges is necessary, we can always
-introduce custom merge functions later. The main cost of custom merge
-functions is that they require the bag of definitions introduced here.
-But if the `coerce` metadata keyword is added, then carrying this bag
-around is a sunk cost.
+supported. We consider this use case rare enough to set it aside.
+Likewise, a user cannot ask for the semilattice of arrays under
+zipping, since for arrays merging is already defined to be the join of
+the flat lattice (arrays merge if and only if they are equal). We
+consider merging by position elements in sequences defined
+independently to be an anti pattern anyway, and have not found
+convincing use cases for it in the wild.
+
+If controlling the join semilattice of merges is necessary, we can
+always introduce custom merge functions later. The main cost of custom
+merge functions is that they require the bag of definitions introduced
+here. But if the `coerce` metadata keyword is added, then carrying
+this bag around is a sunk cost.
 
 ## Alternatives
 
