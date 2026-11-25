@@ -192,20 +192,13 @@ the following API:
 }
 ```
 
-Sets need a canonical representation, determined by some total
+For the serialization of sets as arrays to be independent of the order
+in which sets were constructed through successive unions, we need
+a canonical representation of sets. This can be achieved given a total
 preorder. `std.set.from_array` takes a key function characterizing the
-preorder. When taking the union of two sets, their respective key
-functions `f`, `g` are first merged pointwise. The resulting key
-function is well-defined on every element where `f`, `g` agree, and
-fail with a merge error otherwise. This key function is used to merge
-equivalent elements. It is also used for deciding the order of the
-elements when converting to an array.
-
-In practice, the common case will be that `f` and `g` are the same
-function. Since merging is assumed to be idempotent, the runtime could
-avoid it altogether by testing for closure equality. The important
-point is that this is merely an optimization. The meaning does not
-depend on it.
+preorder. When taking the union of two sets, elements with identical
+keys merge. Elements of the result of `std.set.to_array` are in
+ascending order of key values.
 
 A key function must return a scalar or an array of scalars. For each
 type, the order is fixed by the language to be the order implied by
@@ -214,8 +207,8 @@ the comparison operator for that type found in the standard library
 etc). A key function that returns key values of different type is an
 error.
 
-Arrays are used to conveniently express compound keys (see Kubernetes
-example below).
+Arrays are used to conveniently express compound keys (see the
+Kubernetes example below).
 
 Merging sets is defined as set union:
 
