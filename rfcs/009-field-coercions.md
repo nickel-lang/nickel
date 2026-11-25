@@ -275,12 +275,12 @@ A field's value is computed only when the field is forced:
 In practice, an implementation can avoid recomputation. It can skip
 coercing a definition that is already in the coercion’s image, and
 cache a field’s value per record. The meaning does not depend on
-either.
+either optimization.
 
 The [NixOS module system][nixos-modules], which also features
 coercions using `coercedTo`, implements the same pipeline: it collects
-definitions, filters them by priority, coerces each, merges them, and
-only then checks them.
+definitions, filters them by priority, coerces each definition, merges
+them, and only then checks them.
 
 Coercions are contracts. Custom contracts are proposed to merged
 pointwise, as for functions. On types, merging is done by equality.
@@ -523,16 +523,15 @@ work as follows:
 ```
 
 This construction exploits the fact that finite sets, under union,
-form the free bounded join-semilattice, which doesn't lose
-information.
+form the free semilattice, which doesn't lose information.
 
 ### Implicit set order
 
 In this proposal, the user provides an order of their choosing when
 creating a set. We could instead have the evaluator infer an implicit
 order. This has the advantage of brevity. We wouldn't need to pass
-a comparison function to set constructors or to coercions, nor to
-merge coercions. It has the disadvantage that,
+a key function to set constructors or to coercions. It has the
+disadvantage that,
 
 1. comparing elements structurally may be less performant, when
    a primary key of one or two fields is nearly always readily
