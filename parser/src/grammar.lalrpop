@@ -74,8 +74,6 @@ use crate::{
     fun,
 };
 
-use malachite::base::num::basic::traits::Zero;
-
 grammar<'input, 'ast, 'err, 'wcard>(
     alloc: &'ast AstAlloc,
     src_id: FileId,
