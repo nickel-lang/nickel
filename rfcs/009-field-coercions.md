@@ -188,6 +188,7 @@ the following API:
   std.set.from_array : forall a. (a -> Dyn) -> Array a -> Set a,
   std.set.to_array : forall a. Set a -> Array a,
   std.set.union : forall a. Set a -> Set a -> Set a,
+  std.set.elem : forall a. a -> Set a -> Bool,
 }
 ```
 
