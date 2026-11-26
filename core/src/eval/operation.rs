@@ -1742,6 +1742,15 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                 let result = if let Some(n2_as_int) =
                     i32::try_from(n2).ok().and_then(|n| isize::try_from(n).ok())
                 {
+                    // Raising zero to a negative power is a division by zero. `Number::pow`
+                    // panics in that case, so we have to catch it before.
+                    if n1 == &Number::ZERO && n2_as_int < 0 {
+                        return Err(Box::new(EvalErrorKind::Other(
+                            String::from("division by zero"),
+                            pos_op,
+                        )));
+                    }
+
                     n1.pow(n2_as_int)
                 } else {
                     let result_as_f64 = n1.to_f64().powf(n2.to_f64());
