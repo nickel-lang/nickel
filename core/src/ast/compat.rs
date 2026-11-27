@@ -577,7 +577,8 @@ impl From<&term::UnaryOp> for PrimOp {
             | term::UnaryOp::RecDefault
             | term::UnaryOp::RecForce
             | term::UnaryOp::ContractPostprocessResult
-            | term::UnaryOp::ContractAttachDefaultLabel) => {
+            | term::UnaryOp::ContractAttachDefaultLabel
+            | term::UnaryOp::ContractExit) => {
                 panic!("didn't expect {op} at the parsing stage")
             }
         }
@@ -668,6 +669,7 @@ impl From<&term::NAryOp> for PrimOp {
             term::NAryOp::RecordUnsealTail => PrimOp::RecordUnsealTail,
             term::NAryOp::LabelInsertTypeVar => PrimOp::LabelInsertTypeVar,
             term::NAryOp::ArraySlice => PrimOp::ArraySlice,
+            term::NAryOp::EffectRaw(name) => PrimOp::Effect(LocIdent::from(*name)),
         }
     }
 }
@@ -1105,6 +1107,9 @@ impl FromAst<PrimOp> for TermPrimOp {
             PrimOp::RecordUnsealTail => TermPrimOp::NAry(term::NAryOp::RecordUnsealTail),
             PrimOp::LabelInsertTypeVar => TermPrimOp::NAry(term::NAryOp::LabelInsertTypeVar),
             PrimOp::ArraySlice => TermPrimOp::NAry(term::NAryOp::ArraySlice),
+            // `%effect%` desugars to a single-arg `EffectRaw` OpN — the mainloop wraps the
+            // payload in `Force` on entry so the arg is deep-evaluated before the yield.
+            PrimOp::Effect(name) => TermPrimOp::NAry(term::NAryOp::EffectRaw(name.ident())),
         }
     }
 }
