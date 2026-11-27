@@ -288,7 +288,7 @@ pointwise, as for functions. On types, merging is done by equality.
 Furthermore, a coercion is a contract obeying the following two laws:
 
 1. a coercion is idempotent,
-2. the coercion and merge commute:
+2. a coercion distributes over a merge:
 
    ```nickel
    (x & y) | C == (x | C) & (y | C)
