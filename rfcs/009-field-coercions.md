@@ -309,7 +309,7 @@ element. While it is idempotent, its image is not closed under union.
 following problem:
 
 ```nickel
-let num_set = std.set.from_array std.number.compare in
+let num_set = std.set.from_array std.function.id in
 let r1 = { a = num_set [1] } in
 let r2 = { a = num_set [2] } in
 let merged = { a | coerce Drop } & r1 & r2 in
