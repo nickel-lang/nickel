@@ -553,6 +553,19 @@ domain-specific coercions, or as follows:
 let SetByDefault = std.set.SetBy std.to_string
 ```
 
+### Naming
+
+Coercions are currently referred to as normalizing contracts in Nickel
+documentation, though no laws apply to them that don't also apply to
+all contracts. We propose to refer to them uniformly as coercions,
+satisfying the laws stated above, following precedent from Common
+Lisp, following the common meaning of the word as "automatic or
+implicit conversion of a value from one type to another" in other
+programming languages, because it's a less ambiguous term than
+"normalizing" (which also means something else in type theory), and
+because `coerce` is a short keyword. But alternative names for the
+keyword could be `normalize`, `convert`, `projection`, etc.
+
 ## Appendix
 
 ### Current workarounds
