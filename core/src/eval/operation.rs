@@ -875,6 +875,7 @@ impl<'ctxt, R: ImportResolver, C: Cache> VirtualMachine<'ctxt, R, C> {
                         pos,
                     ))
                 }),
+            UnaryOp::DebugString => Ok(NickelValue::string(value.to_string(), pos_op_inh).into()),
             UnaryOp::NumberFromString => {
                 if let Some(s) = value.as_string() {
                     let n = parse_number_sci(s).map_err(|_| {
